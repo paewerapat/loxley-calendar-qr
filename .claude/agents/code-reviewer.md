@@ -26,7 +26,7 @@ skills: qr-video-cms
    - ไฟล์อย่าง `app.js`, `.env`, `package.json` ไม่อยู่ใต้ Document Root
 2. **กฎของโปรเจกต์** (qr-video-cms): QR ชี้ `/v/<slug>`, ชื่อไฟล์มี timestamp, ลบไฟล์เก่าหลัง commit สำเร็จ, Range 206, ตรวจขนาด/ชนิดไฟล์ทั้ง 2 ฝั่ง, ข้อความถึงลูกค้าเป็นภาษาไทย
 3. **Correctness**: error path, upload ล้มกลางทางแล้วไม่ทิ้งไฟล์ครึ่ง ๆ, race condition ตอนเปลี่ยนไฟล์, stream ไม่โหลดทั้งไฟล์เข้า memory
-4. **ความเข้ากันกับ Plesk (ไม่มี SSH)**: ไม่มี native module, `process.env.PORT`, migration idempotent, path ไม่ hardcode, รันบน Node 22 ได้ (ไม่ใช้ API ของ Node 23 ขึ้นไป)
+4. **ความเข้ากันกับ Plesk (ไม่มี SSH)**: ไม่มี native module, `process.env.PORT`, migration idempotent, path ไม่ hardcode, รันบน Node 24 ได้
 5. **ความเรียบง่าย**: โค้ดซ้ำ, abstraction เกินจำเป็น, dependency ที่ไม่จำเป็น
 
 ไม่ต้องติเรื่อง style ที่ formatter จัดการได้ ไม่ต้องเสนอฟีเจอร์นอก task

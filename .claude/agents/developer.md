@@ -14,7 +14,7 @@ skills: qr-video-cms
 
 ## ข้อบังคับของ stack นี้
 
-- Node 22 (ตรงกับ server 22.23.3) ใช้ ES modules, `process.env.PORT` เท่านั้น ไฟล์เข้าแอปคือ `app.js`
+- Node 24 (ตรงกับ server) ใช้ ES modules รัน node/npm ผ่าน nvm ตามคำสั่งในหัวข้อ "ข้อมูล hosting" ของ qr-video-cms เท่านั้น, `process.env.PORT` เท่านั้น ไฟล์เข้าแอปคือ `app.js`
 - **ไม่มี SSH บน server**: ห้ามใช้ native module (`better-sqlite3`, `sharp`, `bcrypt` ฯลฯ) ใช้ pure JS แทน (`mysql2`, `bcryptjs`)
 - Migration ต้อง idempotent (`CREATE TABLE IF NOT EXISTS`, seed ด้วย `INSERT IGNORE`) รันได้ด้วย `npm run migrate`
 - ไฟล์วีดีโออยู่ที่ `process.env.STORAGE_DIR` (production = `../qr-storage` นอก Application Root `/httpdocs`) resolve path สัมพัทธ์เทียบกับโฟลเดอร์ของ `app.js` ห้าม hardcode path

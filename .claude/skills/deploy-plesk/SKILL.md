@@ -39,6 +39,7 @@ FTP ใช้ FTPS ได้ (`curl --ssl-reqd` / `set ftp:ssl-force true` ใ�
    ```
    (`node_modules/` และ `tmp/` บน server ถูก exclude ไว้ `--delete` จึงไม่ลบ dependency ที่ Plesk ติดตั้งให้)
    **ห้ามชี้ไปที่ `/qr-storage/` หรือ `/` เด็ดขาด** `--delete` จะลบวีดีโอลูกค้า
+   **ตราบใดที่ยังมีหน้า e-card ชั่วคราวใน `/httpdocs/public/v/`** (ดู qr-video-cms) ต้องเพิ่ม `--exclude-glob public/v/` ใน mirror ไม่งั้น QR ที่ส่งลูกค้าไปแล้วจะเสีย เอาออกได้หลังย้ายวีดีโอเข้าแอปและทดสอบ `/v/ecard-lee/` ผ่านแล้วเท่านั้น
 5. **Dependencies / migration** (ไม่มี SSH ผู้ใช้ต้องกดเอง บอกให้ชัด):
    - `package.json` เปลี่ยน → Plesk → Node.js → **NPM install**
    - มี migration → แท็บ **Run Node.js commands** → `run migrate`

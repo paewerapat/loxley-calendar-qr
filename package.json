@@ -1,0 +1,22 @@
+{
+  "name": "loxley-calendar-qr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LOXLEY Calendar QR: scan a QR to watch a video, with a small CMS for uploading videos",
+  "type": "module",
+  "main": "app.js",
+  "engines": {
+    "node": ">=24.20 <25"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --env-file=.env.dev --watch app.js",
+    "test": "node --env-file=.env.test --test",
+    "migrate": "node scripts/migrate.js",
+    "migrate:dev": "node --env-file=.env.dev scripts/migrate.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "mysql2": "^3.24.6"
+  }
+}
