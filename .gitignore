@@ -1,2 +1,33 @@
 # Windows download metadata
 *:Zone.Identifier
+
+# Secrets (.env.local, .env.deploy, ...)
+.env*
+
+# Claude Code personal settings
+.claude/settings.local.json
+
+# Deploy staging
+.deploy/
+
+# Other secrets
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets/
+
+# Dependencies, build and runtime data
+node_modules/
+dist/
+tmp/
+*.log
+
+# Customer videos and generated QR files never go in the repo
+storage/
+qr-storage/
+*.mp4
+*.mov
+*.m4v
+qr/

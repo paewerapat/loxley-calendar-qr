@@ -1,11 +1,11 @@
 ---
 name: qr-video-cms
-description: สร้างและดูแลระบบหน้าเว็บดูวีดีโอ + QR Code + CMS ให้ลูกค้าอัปโหลดวีดีโอเอง (ปฏิทิน 12 เดือน + e-card) ได้ทั้งบน Cloudflare (Pages/R2/D1/Access) และบน hosting ของเราเอง (FTP + Node.js) พร้อม Login with Google ใช้เมื่อทำงานโปรเจกต์ QR วีดีโอปฏิทิน LOXLEY หรืองานแบบเดียวกัน ทั้งตั้งระบบใหม่ deploy เพิ่มชุดวีดีโอ ทำ QR หรือแก้ปัญหาการเล่นวีดีโอ
+description: สร้างและดูแลระบบหน้าเว็บดูวีดีโอ + QR Code + CMS ให้ลูกค้าอัปโหลดวีดีโอเอง (ปฏิทิน 12 เดือน + e-card) ได้ทั้งบน Cloudflare (Pages/R2/D1/Access) และบน hosting ของเราเอง (FTP + Node.js) พร้อม Login with Google หรือรหัสผ่าน ใช้เมื่อทำงานโปรเจกต์ QR วีดีโอปฏิทิน LOXLEY หรืองานแบบเดียวกัน ทั้งตั้งระบบใหม่ deploy เพิ่มชุดวีดีโอ ทำ QR หรือแก้ปัญหาการเล่นวีดีโอ
 ---
 
 # QR Video CMS
 
-ระบบให้คนสแกน QR แล้วเปิดดูวีดีโอบนมือถือ ลูกค้าล็อกอินด้วย Google เพื่ออัปโหลด/เปลี่ยนวีดีโอเองได้ โดย QR ไม่ต้องพิมพ์ใหม่
+ระบบให้คนสแกน QR แล้วเปิดดูวีดีโอบนมือถือ ลูกค้าล็อกอิน (Google หรือรหัสผ่าน) เพื่ออัปโหลด/เปลี่ยนวีดีโอเองได้ โดย QR ไม่ต้องพิมพ์ใหม่
 
 ## บริบทงาน (โปรเจกต์ปัจจุบัน)
 
@@ -15,6 +15,7 @@ description: สร้างและดูแลระบบหน้าเว�
 - ขนาดไฟล์: รายเดือน ≤ 20MB, e-card ≤ 100MB
 - ฝากไฟล์ 1 ปีนับจากวันส่งมอบ ต่ออายุปีละ 500 บาท
 - ห้ามใช้ Netlify ฟรีกับไฟล์วีดีโอ (แบนด์วิดท์ 100GB/เดือนหมดเร็ว)
+- **Login หลังบ้าน: username + รหัสผ่าน** (ผู้ใช้เลือกแล้ว ไม่ใช้ Google) ส่วนที่พูดถึง Google OAuth / Cloudflare Access ในไฟล์นี้ใช้กับงานอื่น
 - **โปรเจกต์นี้ใช้แบบ C:** หน้าเว็บ + CMS + ไฟล์วีดีโอ อยู่บน hosting Plesk ของเราทั้งหมด (Node.js + MySQL + ดิสก์) ไม่ใช้ R2/Cloudflare ส่วนที่พูดถึง R2/D1/Access ในไฟล์นี้ใช้กับงานอื่นที่เลือกแบบ A/B เท่านั้น
 
 ถ้าเริ่มโปรเจกต์ใหม่ที่ไม่ใช่ลูกค้านี้ ให้ถามจำนวนชุด ขนาดไฟล์ ระยะเวลาฝากไฟล์ และอีเมลผู้ดูแลก่อนเริ่ม
@@ -52,19 +53,33 @@ Stack ฝั่งหน้าเว็บ: ใช้อะไรก็ได้
 
 **ผู้ใช้เลือกแบบ C สำหรับโปรเจกต์ LOXLEY แล้ว** สำหรับงานใหม่ให้ถามก่อน ถ้าใช้แบบ C ต้องเช็ก 2 อย่างตั้งแต่ต้น: (1) อัปโหลดไฟล์ 100MB ผ่าน nginx ของ Plesk ได้ไหม (2) เงื่อนไขแบนด์วิดท์/fair use ของ hosting ถ้าข้อ 1 ไม่ผ่านให้ทำ chunked upload
 
-## ข้อมูล hosting ของเรา (FTP + Node.js)
+## ข้อมูล hosting ของเรา (Plesk + Node.js)
 
-> ผู้ใช้กรอกส่วนนี้ ถ้ายังว่าง ให้ถามผู้ใช้ก่อน deploy ห้ามเดา
+> ค่าลับทั้งหมด (IP, FTP, DB) อยู่ใน `.env.local` ซึ่งไม่ถูก commit ห้ามคัดลอกค่าลงไฟล์ใน repo เพราะ repo นี้เป็น **public** ข้อที่ยังเป็น `____` ให้ถามผู้ใช้ ห้ามเดา
 
-- ผู้ให้บริการ / แผน: `____`
 - Control panel: **Plesk** (ดูหัวข้อ "Plesk" ด้านล่าง)
-- Node.js version ที่เลือกได้: `____`
-- FTP host / port / โหมด (FTP, FTPS, SFTP): `____` (credential เก็บใน `.env.deploy` ห้าม commit)
-- โฟลเดอร์แอป (application root) และ domain/subdomain ที่ผูก: `____`
-- มี SSH / รัน `npm install` ใน panel ได้ไหม: `____`
-- ฐานข้อมูลที่ให้มา (MySQL/MariaDB/PostgreSQL): `____`
-- ขนาดดิสก์ / แบนด์วิดท์ / ขนาด upload สูงสุดต่อ request: `____`
-- DNS อยู่ที่ Cloudflare หรือไม่: `____`
+- Node.js บน server: **22.23.3** (ในเครื่อง dev เป็น 22.22.x major เดียวกัน) ห้ามใช้ API ที่มีเฉพาะ Node 23 ขึ้นไป ตั้ง `"engines": { "node": ">=22.22 <23" }` ใน `package.json`
+- FTP: `FTP_HOST`, `FTP_ACCOUNT_NAME`, `FTP_PASSWORD` ใน `.env.local` ใช้ **FTPS** ได้ (ทดสอบแล้ว 2026-10-24) root ของ FTP คือโฟลเดอร์ subscription (`httpdocs/`, `logs/`, `error_docs/`)
+- **ไม่มี SSH**: `npm ci` และ migration ต้องรันผ่านปุ่ม NPM install / แท็บ "Run Node.js commands" ในหน้า Node.js ของ Plesk ส่วน restart ทำได้โดยอัป `tmp/restart.txt` ผ่าน FTP หรือกด Restart App ขั้นตอนเต็มอยู่ใน skill `deploy-plesk`
+- ฐานข้อมูล: **MariaDB 10.11** (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`) ต่อจากเครื่อง dev ได้ (ทดสอบแล้วเมื่อ 2026-10-23 ตอนนั้นยังไม่มีตาราง) DB นี้คือ **production** ตอน dev/test ให้สร้าง DB แยกใน Plesk (เช่น `<DB_NAME>_dev`) แล้ว override `DB_NAME`
+- ขนาด upload สูงสุดต่อ request: ยังไม่ยืนยัน (คาดว่าราว 100MB) **ต้องทดสอบอัปโหลด 100MB ผ่าน nginx ของ Plesk จริงก่อนออกแบบหน้าอัปโหลด**
+- ขนาดดิสก์ / แบนด์วิดท์: `____`
+- Hosting: **shared hosting ของ Hostatom** (IP ใช้ร่วมกับลูกค้าอื่น) เข้าด้วย IP เปล่าจะได้หน้า default ของเครื่อง ไม่ใช่แอปเรา จึง**ต้องเข้าผ่านโดเมนเสมอ**
+- Domain: **`wjasmin.site`** (จดที่ Hostinger, 2026-10-24) URL ของ QR คือ `https://wjasmin.site/v/<slug>` ห้ามเปลี่ยนหลังพิมพ์ QR
+- DNS: อยู่ที่ Hostinger (nameserver `*.dns-parking.com`) มี `A @ → IP ของ hosting` และ `CNAME www → wjasmin.site` ถ้าย้าย hosting ให้แก้ A record ที่ Hostinger ที่เดียว ไม่ใช้ Cloudflare
+- SSL: Let's Encrypt ใน Plesk (ครอบ `wjasmin.site` + `www`) และเปิด redirect http → https ใน Plesk แล้ว
+- ต้องต่ออายุโดเมนให้ครอบคลุมช่วงที่ QR ใช้งาน (เปิด auto-renew ที่ Hostinger) และแจ้งลูกค้าในเอกสารส่งมอบว่าถ้าโดเมนหมดอายุ QR จะใช้ไม่ได้
+
+### Login ด้วยรหัสผ่าน (แทน Google OAuth ในหัวข้อ "แบบ B/C")
+
+- ตาราง `admin_users (id, username UNIQUE, password_hash, created_at, last_login_at)` ผู้ใช้มี 2 คน คือลูกค้าและเรา ไม่มีหน้าสมัครสมาชิก สร้างผู้ใช้ด้วย `npm run admin:create` (รันผ่าน "Run Node.js commands" ใน Plesk)
+- hash ด้วย `bcryptjs` (pure JS) cost 12 ห้ามใช้ `bcrypt` ที่เป็น native
+- session เก็บใน MariaDB (`express-session` + `express-mysql-session`) restart แอปแล้วไม่หลุด สร้าง session ใหม่ (`regenerate`) ทุกครั้งที่ login สำเร็จ หมดอายุหลังไม่ใช้งาน 8 ชั่วโมง
+- cookie `httpOnly`, `sameSite=lax` ส่วน `secure` ผูกกับ env `COOKIE_SECURE` (production = `true` เพราะเป็น https, ตอน dev บน http://localhost = `false`) ตั้ง `app.set('trust proxy', 1)` เพราะ nginx ของ Plesk เป็นตัวรับ https แล้วส่งต่อให้แอปเป็น http
+- กัน brute force: ผิด 5 ครั้งใน 15 นาทีต่อ IP+username ให้ล็อก 15 นาที ข้อความผิดพลาดใช้แบบเดียวกันทุกกรณี "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" ไม่บอกว่า username มีอยู่จริงไหม
+- request ที่แก้ข้อมูล (POST/PUT/DELETE) ต้องตรวจ header `Origin` ให้ตรงกับ host ของเรา
+- มีหน้าเปลี่ยนรหัสผ่านในหลังบ้าน (ต้องกรอกรหัสเดิม) และปุ่มออกจากระบบ
+- `updated_by` ในตาราง videos เก็บ username
 
 ## แบบ B/C: แอป Node.js บน hosting
 
@@ -72,7 +87,7 @@ Stack ฝั่งหน้าเว็บ: ใช้อะไรก็ได้
 
 **ฐานข้อมูล:** ใช้ MySQL/MariaDB ที่ hosting ให้มา (ตาราง `videos` เหมือนด้านล่าง เปลี่ยน type ให้ตรง) หลีกเลี่ยง `better-sqlite3` และ native module อื่น เพราะ hosting แชร์มัก build native addon ไม่ผ่าน ถ้าจำเป็นต้องใช้ไฟล์ ให้ใช้ JSON file + เขียนแบบ atomic (เขียนไฟล์ชั่วคราวแล้ว rename)
 
-**Login with Google (ในแอป):**
+**Login with Google (ในแอป):** (ต้องมีโดเมน + https ถ้าไม่มี ใช้ "Login ด้วยรหัสผ่าน" ด้านบน ซึ่งโปรเจกต์ LOXLEY ใช้อยู่)
 - สร้าง OAuth Client ใน Google Cloud Console (ฟรี) ตั้ง redirect URI = `https://<domain>/auth/google/callback`
 - ใช้ `openid-client` หรือ `passport-google-oauth20` ขอ scope `openid email` เท่านั้น
 - ตรวจ `email_verified === true` และอีเมลต้องอยู่ใน `ADMIN_EMAILS` (env, คั่นด้วย comma) ไม่งั้นปฏิเสธ
@@ -105,8 +120,9 @@ Stack ฝั่งหน้าเว็บ: ใช้อะไรก็ได้
 ใช้ส่วนขยาย **Node.js** ของ Plesk (รันผ่าน Phusion Passenger) ตั้งค่าที่ Websites & Domains → โดเมน → Node.js:
 
 - **Node.js Version:** เลือก LTS ล่าสุดที่มีให้ แล้วใช้ version เดียวกันในเครื่องตอน build
-- **Application Root:** โฟลเดอร์แอป (ไม่ใช่ `httpdocs`) เช่น `/qr-app`
-- **Document Root:** โฟลเดอร์ static ที่ build แล้ว เช่น `/qr-app/public` (Plesk บังคับให้อยู่ใต้ Application Root)
+- **Application Root:** `/httpdocs`
+- **Document Root:** `/httpdocs/public` เก็บไฟล์ static (Plesk บังคับให้อยู่ใต้ Application Root และโฟลเดอร์ต้องมีอยู่ก่อนถึงจะเลือกได้) **ห้ามตั้งให้เท่ากับ Application Root** เพราะ nginx จะเสิร์ฟไฟล์ใน Document Root ตรง ๆ ทำให้ `app.js`, `package.json` และโค้ดทั้งหมดเปิดผ่าน URL ได้
+- **ที่เก็บวีดีโอ (แบบ C):** `/qr-storage/videos/` อยู่นอก `/httpdocs` ตั้ง env `STORAGE_DIR=../qr-storage` (แอป resolve เทียบกับ Application Root ไม่ hardcode path เต็ม เพราะ path ของ vhost อาจเปลี่ยนตามชื่อโดเมน) deploy ที่ mirror ทับ `/httpdocs` จึงไม่มีทางลบวีดีโอ
 - **Application Startup File:** `app.js` (หรือชื่อไฟล์เข้าแอปจริง)
 - **Application Mode:** `production`
 - **Custom environment variables:** ใส่ secret ทั้งหมดที่นี่ (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ADMIN_EMAILS`, `R2_*`, ข้อมูล DB) แทนการวางไฟล์ `.env`
@@ -135,7 +151,7 @@ CREATE TABLE videos (
   poster_key  TEXT,
   size_bytes  INTEGER,
   updated_at  TEXT,
-  updated_by  TEXT                -- อีเมลจาก Access JWT
+  updated_by  TEXT                -- อีเมลจาก Access JWT (โปรเจกต์ LOXLEY: username ที่ login)
 );
 ```
 
@@ -143,7 +159,7 @@ Seed 14 แถวไว้ตั้งแต่แรก แม้ยังไ�
 
 ## กฎสำคัญ (ห้ามพลาด)
 
-> แบบ C: กฎข้อ 1, 2, 5, 7 ใช้ตามเดิม (ข้อ 2 ใช้กับชื่อไฟล์บนดิสก์ `storage/videos/<slug>/<epoch>.mp4`) ข้อ 3 ทำผ่าน `res.sendFile`/`express.static` ข้อ 4 แทนด้วยการรับไฟล์แบบ stream ตามหัวข้อ "แบบ B/C" และข้อ 6 แทนด้วยการตรวจ session จาก Google OAuth
+> แบบ C: กฎข้อ 1, 2, 5, 7 ใช้ตามเดิม (ข้อ 2 ใช้กับชื่อไฟล์บนดิสก์ `$STORAGE_DIR/videos/<slug>/<epoch>.mp4`) ข้อ 3 ทำผ่าน `res.sendFile`/`express.static` ข้อ 4 แทนด้วยการรับไฟล์แบบ stream ตามหัวข้อ "แบบ B/C" และข้อ 6 แทนด้วยการตรวจ session (Google OAuth หรือ login รหัสผ่าน)
 
 1. **QR ชี้ไปที่ `/v/<slug>` เสมอ ห้ามชี้ไปที่ไฟล์วีดีโอตรง ๆ** เพื่อให้เปลี่ยนวีดีโอได้โดย QR เดิมยังใช้ได้ slug ห้ามเปลี่ยนหลังพิมพ์ QR แล้ว
 2. **ตั้งชื่อไฟล์ใน R2 แบบมี timestamp** (`videos/<slug>/<epoch>.mp4`) ไม่เขียนทับชื่อเดิม กันปัญหา cache ค้างเป็นวีดีโอเก่า ลบไฟล์เก่าหลัง commit สำเร็จเท่านั้น
@@ -155,8 +171,16 @@ Seed 14 แถวไว้ตั้งแต่แรก แม้ยังไ�
 
 ## หน้า public `/v/<slug>`
 
-- `<video controls playsinline preload="metadata" poster="...">` ไม่ autoplay มีเสียง (เบราว์เซอร์มือถือบล็อก)
-- แสดงชื่อเดือน/ชื่อ e-card, โทนสีเดียวกับงานเดิม (พื้นดำ ตัวหนังสือทอง ฟอนต์ไทยอ่านง่าย)
+- **ตามเดโม่ที่ลูกค้าเห็นแล้ว:** พื้นดำเต็มจอ วีดีโอแนวนอนกว้างเต็มจอ (เว้นขอบเล็กน้อย) อยู่กึ่งกลางแนวตั้ง ใต้วีดีโอมีข้อความสีทองตัวเล็ก "แตะหน้าจอหนึ่งครั้งเพื่อฟังเสียงบรรยาย"
+- `<video playsinline preload="auto" poster="...">` ไม่แสดง controls ของเบราว์เซอร์ ไม่ใช้ `loop`
+- **เล่นพร้อมเสียงก่อน แล้วถอยเมื่อถูกบล็อก** (ผู้ใช้เลือกแล้ว 2026-10-24):
+  1. ตอนโหลดหน้า เรียก `play()` แบบเปิดเสียง ถ้าสำเร็จ (คอมพิวเตอร์ หรือ browser ที่อนุญาต) ให้เล่นต่อและไม่ต้องแสดงข้อความแนะนำ
+  2. ถ้าโดน `NotAllowedError` (มือถือส่วนใหญ่) ให้ตั้ง `muted = true` แล้ว `play()` ใหม่ และแสดงข้อความ "แตะหน้าจอหนึ่งครั้งเพื่อฟังเสียงบรรยาย"
+  3. แตะครั้งแรกที่ใดก็ได้ (listener บน `document`) → `currentTime = 0`, `muted = false`, `play()` (**เริ่มใหม่จากต้นพร้อมเสียง**) แล้วซ่อนข้อความแนะนำ
+  4. ถ้า autoplay แบบปิดเสียงก็ไม่ทำงาน (โหมดประหยัดแบตเตอรี่, in-app browser บางตัว) การแตะครั้งแรกต้องเริ่มเล่นพร้อมเสียงได้ทันที
+- **ปุ่มเปิด/ปิดเสียง** (🔊/🔇) มุมจอ แสดงตลอด กดแล้วสลับ `muted` อย่างเดียว ไม่ restart ห้ามให้การกดปุ่มนี้ไปเรียก handler "แตะครั้งแรก" ซ้ำ (`stopPropagation`) ปุ่มต้องใหญ่พอแตะง่ายบนมือถือ (≥ 44px) และมี `aria-label` ภาษาไทย
+- **เล่นจบ** (`ended`) → แสดงปุ่ม "ดูอีกครั้ง" กลางวีดีโอ กดแล้ว `currentTime = 0` + `play()` พร้อมเสียงตามสถานะปุ่มเสียงปัจจุบัน
+- แสดงชื่อเดือน/ชื่อ e-card ใน `<title>` โทนสีพื้นดำ ตัวหนังสือทอง ฟอนต์ไทยอ่านง่าย
 - ถ้ายังไม่มีไฟล์: แสดงข้อความ "วีดีโอเดือนนี้จะเปิดให้ชมเร็ว ๆ นี้" แทนหน้าเปล่า
 - ทดสอบใน LINE in-app browser และ Facebook in-app browser ด้วย คนส่วนใหญ่สแกนแล้วเปิดผ่านแอปเหล่านี้
 
@@ -206,8 +230,11 @@ npx qrcode -t png -e Q -w 2000 -o qr/m01.png "https://<domain>/v/m01"
 - [ ] เล่นวีดีโอได้บน iPhone Safari, Android Chrome, LINE in-app browser
 - [ ] Seek/เลื่อนวีดีโอได้ (ยืนยันว่า Range ทำงาน)
 - [ ] (แบบ B/C) restart แอปแล้วยังทำงาน, `.env` ไม่ถูกเข้าถึงผ่าน URL, deploy รอบใหม่ไม่ลบวีดีโอเดิม
-- [ ] เข้า `/admin` ด้วยอีเมลที่ไม่ได้รับอนุญาต → ถูกบล็อก
-- [ ] เรียก `/api/admin/*` ตรง ๆ โดยไม่มี JWT → 401/403
+- [ ] เข้า `/admin` ด้วยอีเมลที่ไม่ได้รับอนุญาต (หรือรหัสผ่านผิด) → ถูกบล็อก
+- [ ] เรียก `/api/admin/*` ตรง ๆ โดยไม่มี JWT/session → 401/403
+- [ ] (login รหัสผ่าน) ใส่รหัสผิด 5 ครั้ง → ถูกล็อก 15 นาที, restart แอปแล้ว session ยังอยู่, เปลี่ยนรหัสผ่านได้
+- [ ] `https://wjasmin.site` และ `https://www.wjasmin.site` ใช้ cert ที่ถูกต้อง, http redirect ไป https, โดเมนเปิด auto-renew และแจ้งลูกค้าแล้วว่า QR ขึ้นกับโดเมนนี้
+- [ ] หน้า `/v/<slug>` บนมือถือ: เล่นเองแบบปิดเสียง แตะครั้งเดียวเริ่มใหม่พร้อมเสียง ปุ่ม 🔊/🔇 ใช้ได้ เล่นจบแล้วมีปุ่ม "ดูอีกครั้ง" ทดสอบทั้ง iPhone และ Android (ทั้ง browser ปกติและ LINE) ส่วนบนคอมพิวเตอร์เล่นพร้อมเสียงได้เลย
 - [ ] อัปโหลดไฟล์เกินขนาด → ขึ้นข้อความเตือนภาษาไทย ไม่ค้าง
 - [ ] เปลี่ยนวีดีโอแล้ว QR เดิมเปิดได้วีดีโอใหม่ ไฟล์เก่าถูกลบจาก R2
 - [ ] QR 14 อันสแกนผ่านทั้งหมด
