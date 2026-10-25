@@ -4,6 +4,7 @@
 // `node --env-file=.env.dev|.env.test` locally. This module never loads env files
 // itself (in particular never .env.local, which holds production secrets).
 
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,7 +76,48 @@ export function loadConfig(env = process.env, { scope = 'app', requirePort = tru
     config.port = get('PORT') === '' ? null : parsePort('PORT', get('PORT'));
     config.storageDir = path.resolve(APP_ROOT, get('STORAGE_DIR'));
     config.publicDir = path.join(APP_ROOT, 'public');
+    checkStorageDir(config.storageDir, config.publicDir, nodeEnv);
   }
 
   return config;
+}
+
+// Messages name the variable only; the resolved path is never printed.
+function checkStorageDir(storageDir, publicDir, nodeEnv) {
+  // Check both the lexical path and the real path (symlinks followed), so a symlink
+  // pointing into public/ or the app root is caught too.
+  const pairs = [
+    [storageDir, publicDir, APP_ROOT],
+    [realpathLoose(storageDir), realpathLoose(publicDir), realpathLoose(APP_ROOT)],
+  ];
+  for (const [storage, pub, root] of pairs) {
+    // Videos must never be reachable as static files (nginx serves public/ directly),
+    // and the app root itself holds the code.
+    if (isInsideOrEqual(storage, pub) || storage === root) {
+      throw new ConfigError('Environment variable STORAGE_DIR must not be inside public/ or equal to the app root');
+    }
+    // In production the app root is the deploy target (FTP mirror with --delete), so
+    // videos stored anywhere under it could be wiped by a deploy.
+    if (nodeEnv === 'production' && isInsideOrEqual(storage, root)) {
+      throw new ConfigError('Environment variable STORAGE_DIR must be outside the app root when NODE_ENV=production');
+    }
+  }
+}
+
+// realpath of `p`; if it does not exist yet, realpath of its nearest existing
+// ancestor with the missing part appended (pure lexical path as a last resort).
+function realpathLoose(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    const parent = path.dirname(p);
+    if (parent === p) return p;
+    return path.join(realpathLoose(parent), path.basename(p));
+  }
+}
+
+// True when `child` is `parent` or somewhere below it (lexically, after resolve).
+export function isInsideOrEqual(child, parent) {
+  const rel = path.relative(parent, child);
+  return rel === '' || (!path.isAbsolute(rel) && rel.split(path.sep)[0] !== '..');
 }

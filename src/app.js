@@ -4,6 +4,7 @@
 
 import express from 'express';
 import { notFoundPage, errorPage } from './pages.js';
+import { mountVideoRoutes } from './video-routes.js';
 
 /**
  * @param {object} deps
@@ -32,8 +33,12 @@ export function createApp({ config, pool, extraRoutes } = {}) {
     res.status(dbOk ? 200 : 503).json({ ok: dbOk, db: dbOk });
   });
 
+  mountVideoRoutes(app, { config, pool });
+
   // Only public/ is web-accessible. Dotfiles are never served.
-  app.use(express.static(config.publicDir, { dotfiles: 'ignore', index: false }));
+  // redirect: false — never answer a directory (e.g. /assets, raw /v/%2e%2e) with a
+  // 301 page; it falls through to the Thai 404.
+  app.use(express.static(config.publicDir, { dotfiles: 'ignore', index: false, redirect: false }));
 
   if (extraRoutes) extraRoutes(app);
 

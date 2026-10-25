@@ -10,6 +10,8 @@ export function connectionOptions(db) {
     user: db.user,
     password: db.password,
     charset: 'UTF8MB4_UNICODE_CI',
+    // DATETIME columns hold UTC (written with UTC_TIMESTAMP()); read them back as UTC.
+    timezone: 'Z',
     connectTimeout: 5000,
   };
 }

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done   # committed dc90db9 (2026-10-24) ยังไม่ deploy
 base: c57fe112a34396c5bd61c5de59f829255b1ec394
 ---
 # 01 วางโครงแอป Express + MariaDB + seed 14 ชุด

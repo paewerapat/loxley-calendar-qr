@@ -34,8 +34,13 @@ export const server = http.createServer(app);
 const mode = `NODE_ENV=${config.nodeEnv ?? 'unset'}`;
 
 server.on('error', (err) => {
-  console.error(`[startup] cannot listen: ${err.code ?? err.message}`);
-  process.exit(1);
+  // Failing to start (port in use, ...) is fatal. Once listening, a server-level
+  // error must not take the whole site down: log it and keep serving.
+  if (!server.listening) {
+    console.error(`[startup] cannot listen: ${err.code ?? err.message}`);
+    process.exit(1);
+  }
+  console.error(`[server] error: ${err.code ?? err.message}`);
 });
 
 server.listen(underPassenger ? 'passenger' : config.port, () => {

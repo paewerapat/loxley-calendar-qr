@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { loadConfig, ConfigError, APP_ROOT } from '../src/config.js';
 import { APP_JS, runNode } from './helpers.js';
 
@@ -127,4 +128,106 @@ test('scripts/migrate.js with a missing variable exits 1 and names it', async ()
   assert.equal(result.code, 1);
   assert.match(result.stderr, /DB_USERNAME/);
   assert.ok(!result.stderr.includes(SECRET));
+});
+
+// Task 02 AC6: videos must never end up web-accessible or mixed with the code.
+for (const [label, value] of [
+  ['public/ itself', 'public'],
+  ['public/ with trailing slash', 'public/'],
+  ['inside public/', 'public/videos'],
+  ['deep inside public/ via ..', 'src/../public/v/storage'],
+  ['the app root', '.'],
+  ['the app root (absolute)', APP_ROOT],
+]) {
+  test(`STORAGE_DIR = ${label} → ConfigError naming STORAGE_DIR`, () => {
+    assert.throws(() => loadConfig(baseEnv({ STORAGE_DIR: value })), (err) => {
+      assert.ok(err instanceof ConfigError);
+      assert.match(err.message, /STORAGE_DIR/);
+      assert.ok(!err.message.includes(APP_ROOT), 'does not print the resolved path');
+      return true;
+    });
+  });
+}
+
+test('STORAGE_DIR outside the app root or in a sibling folder of public/ is accepted', () => {
+  assert.doesNotThrow(() => loadConfig(baseEnv({ STORAGE_DIR: '../qr-storage' })));
+  assert.doesNotThrow(() => loadConfig(baseEnv({ STORAGE_DIR: 'storage' })));
+  assert.doesNotThrow(() => loadConfig(baseEnv({ STORAGE_DIR: 'public-videos' })));
+  assert.doesNotThrow(() => loadConfig(baseEnv({ STORAGE_DIR: path.join(os.tmpdir(), 'x') })));
+});
+
+test('node app.js refuses to start when STORAGE_DIR is inside public/', async () => {
+  const env = { PATH: process.env.PATH, ...baseEnv({ STORAGE_DIR: 'public/videos' }) };
+  const result = await runNode(APP_JS, { env });
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /\[config\].*STORAGE_DIR/);
+  assert.doesNotMatch(result.stdout, /listening/);
+});
+
+// Task 02 round 2: N5 (production keeps videos outside the deploy target) and Q3
+// (symlinks are followed by the STORAGE_DIR guard).
+test('NODE_ENV=production: STORAGE_DIR inside the app root → ConfigError (deploy mirror could wipe it)', () => {
+  for (const value of ['storage', './storage/videos', path.join(APP_ROOT, 'qr-storage')]) {
+    assert.throws(() => loadConfig(baseEnv({ NODE_ENV: 'production', STORAGE_DIR: value })), (err) => {
+      assert.ok(err instanceof ConfigError, value);
+      assert.match(err.message, /STORAGE_DIR must be outside the app root when NODE_ENV=production/);
+      assert.ok(!err.message.includes(APP_ROOT), 'does not print the path');
+      return true;
+    });
+  }
+});
+
+test('NODE_ENV=production: STORAGE_DIR outside the app root is accepted', () => {
+  assert.doesNotThrow(() => loadConfig(baseEnv({ NODE_ENV: 'production', STORAGE_DIR: '../qr-storage' })));
+  assert.doesNotThrow(() => loadConfig(baseEnv({ NODE_ENV: 'production', STORAGE_DIR: path.join(os.tmpdir(), 'x') })));
+});
+
+test('dev / test / unset NODE_ENV may keep STORAGE_DIR=./storage inside the app root', () => {
+  for (const NODE_ENV of ['development', 'test', undefined]) {
+    assert.doesNotThrow(() => loadConfig(baseEnv({ NODE_ENV, STORAGE_DIR: 'storage' })), String(NODE_ENV));
+  }
+});
+
+test('node app.js with NODE_ENV=production and STORAGE_DIR inside the app root refuses to start', async () => {
+  const env = { PATH: process.env.PATH, ...baseEnv({ NODE_ENV: 'production', STORAGE_DIR: 'storage' }) };
+  const result = await runNode(APP_JS, { env });
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /\[config\].*STORAGE_DIR must be outside the app root/);
+  assert.ok(!result.stderr.includes(APP_ROOT));
+});
+
+test('symlinks: STORAGE_DIR pointing (via a symlink) into public/ or at the app root is refused', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'loxley-links-'));
+  try {
+    const toPublic = path.join(dir, 'to-public');
+    const toRoot = path.join(dir, 'to-root');
+    await symlink(path.join(APP_ROOT, 'public'), toPublic);
+    await symlink(APP_ROOT, toRoot);
+    for (const NODE_ENV of ['test', 'production']) {
+      for (const value of [toPublic, path.join(toPublic, 'not-created-yet'), toRoot]) {
+        assert.throws(() => loadConfig(baseEnv({ NODE_ENV, STORAGE_DIR: value })), (err) => {
+          assert.ok(err instanceof ConfigError, `${NODE_ENV} ${value}`);
+          assert.match(err.message, /STORAGE_DIR must not be inside public\/ or equal to the app root/);
+          assert.ok(!err.message.includes(dir) && !err.message.includes(APP_ROOT));
+          return true;
+        });
+      }
+    }
+    // A symlink to a folder inside the app root: fine in test, refused in production.
+    const inside = path.join(dir, 'to-inside');
+    await symlink(path.join(APP_ROOT, 'migrations'), inside);
+    assert.doesNotThrow(() => loadConfig(baseEnv({ NODE_ENV: 'test', STORAGE_DIR: inside })));
+    assert.throws(
+      () => loadConfig(baseEnv({ NODE_ENV: 'production', STORAGE_DIR: inside })),
+      /STORAGE_DIR must be outside the app root when NODE_ENV=production/,
+    );
+    // A real folder outside the app root (through a symlink) is accepted in production.
+    const outsideReal = await mkdtemp(path.join(os.tmpdir(), 'loxley-real-'));
+    const toOutside = path.join(dir, 'to-outside');
+    await symlink(outsideReal, toOutside);
+    assert.doesNotThrow(() => loadConfig(baseEnv({ NODE_ENV: 'production', STORAGE_DIR: toOutside })));
+    await rm(outsideReal, { recursive: true, force: true });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

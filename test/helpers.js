@@ -1,7 +1,9 @@
 // Shared test helpers (no side effects on import; node --test also loads this file).
 
 import net from 'node:net';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { APP_ROOT } from '../src/config.js';
 
@@ -13,6 +15,50 @@ export function assertTestDatabase(dbName) {
   if (!/_test$/.test(dbName ?? '')) {
     throw new Error('Refusing to run DB tests: DB_NAME must end with "_test" (load .env.test)');
   }
+}
+
+// Serialise test files that use the real test database: node --test runs files in
+// parallel processes, and some of them drop/recreate tables. Hold this lock on a
+// dedicated connection for the whole file (released when the connection ends).
+export async function acquireDbSuiteLock(conn) {
+  const [[row]] = await conn.query("SELECT GET_LOCK(CONCAT(DATABASE(), ':test-suite'), 120) AS locked");
+  if (Number(row.locked) !== 1) throw new Error('Could not acquire the test DB lock');
+}
+
+// Temp STORAGE_DIR for tests (never inside the repo, never committed).
+export async function makeTempStorage() {
+  return mkdtemp(path.join(os.tmpdir(), 'loxley-storage-'));
+}
+
+// A tiny fake MP4: an ftyp box followed by deterministic filler bytes.
+export function fakeMp4Bytes(size = 1000) {
+  const buf = Buffer.alloc(size);
+  for (let i = 0; i < size; i++) buf[i] = i % 251;
+  buf.writeUInt32BE(24, 0);
+  buf.write('ftypisom', 4, 'latin1');
+  return buf;
+}
+
+export async function writeStorageFile(storageDir, key, content) {
+  const file = path.join(storageDir, ...key.split('/'));
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, content);
+  return file;
+}
+
+// Stand-in for the mysql2 pool: answers the videos lookup from an in-memory list.
+export function fakePool(rows = []) {
+  return {
+    async query(sql, params = []) {
+      if (/FROM videos WHERE slug = \?/.test(sql)) {
+        const row = rows.find((r) => r.slug === params[0]);
+        return [row ? [{ r2_key: null, size_bytes: null, ...row }] : []];
+      }
+      if (/^SELECT 1$/.test(sql.trim())) return [[{ 1: 1 }]];
+      throw new Error(`fakePool: unexpected query ${sql}`);
+    },
+    async end() {},
+  };
 }
 
 export async function startServer(app) {
@@ -40,9 +86,9 @@ export async function closedPort() {
 
 // Run `node <script>` with an explicit environment and collect its output.
 // If waitFor matches stdout, resolves early and returns a kill() handle.
-export function runNode(script, { env, cwd = APP_ROOT, waitFor, timeoutMs = 15000, execArgv = [] } = {}) {
+export function runNode(script, { env, cwd = APP_ROOT, waitFor, timeoutMs = 15000, execArgv = [], args = [] } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [...execArgv, script], { env, cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [...execArgv, script, ...args], { env, cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     let settled = false;

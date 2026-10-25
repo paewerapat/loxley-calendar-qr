@@ -1,7 +1,7 @@
 // AC4, AC5, AC6 (DB up), AC2 (real app.js). Runs against the database in .env.test
-// (loxley_test). This is the only test file that touches the database. Every test
-// starts from empty tables (beforeEach) and migrates itself when it needs data, so
-// each test passes on its own (--test-name-pattern) and in any order.
+// (loxley_test). DB test files hold a shared lock so they never run at the same
+// time. Every test starts from empty tables (beforeEach) and migrates itself when it
+// needs data, so each test passes on its own (--test-name-pattern) and in any order.
 
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ import { loadConfig, APP_ROOT } from '../src/config.js';
 import { createPool, connectionOptions } from '../src/db.js';
 import { runMigrations, listMigrationFiles } from '../src/migrate.js';
 import { createApp } from '../src/app.js';
-import { assertTestDatabase, startServer, runNode, APP_JS } from './helpers.js';
+import { assertTestDatabase, acquireDbSuiteLock, startServer, runNode, APP_JS } from './helpers.js';
 
 const config = loadConfig(process.env);
 assertTestDatabase(config.db.database);
@@ -25,6 +25,7 @@ const ALL_MIGRATIONS = ['001_create_videos.sql', '002_seed_videos.sql'];
 
 before(async () => {
   conn = await mysql.createConnection(connectionOptions(config.db));
+  await acquireDbSuiteLock(conn); // other DB test files run in parallel processes
 });
 
 beforeEach(async () => {
