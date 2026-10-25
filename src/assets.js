@@ -13,7 +13,7 @@ export function contentHash(content) {
 // Read once at createApp time (files only change with a deploy + restart). A missing
 // file must not stop the app (the QR pages and back office still work): log it
 // without the full path and fall back to the plain URL.
-export function playerAssetUrls(publicDir, { log = console.error } = {}) {
+function assetUrls(publicDir, base, log) {
   const url = (name) => {
     try {
       const content = readFileSync(path.join(publicDir, 'assets', name));
@@ -23,5 +23,14 @@ export function playerAssetUrls(publicDir, { log = console.error } = {}) {
       return `/assets/${name}`;
     }
   };
-  return { css: url('player.css'), js: url('player.js') };
+  return { css: url(`${base}.css`), js: url(`${base}.js`) };
+}
+
+export function playerAssetUrls(publicDir, { log = console.error } = {}) {
+  return assetUrls(publicDir, 'player', log);
+}
+
+// Back-office page (public/assets/admin.css + admin.js), same ?v= scheme.
+export function adminAssetUrls(publicDir, { log = console.error } = {}) {
+  return assetUrls(publicDir, 'admin', log);
 }

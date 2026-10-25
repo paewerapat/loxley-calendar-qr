@@ -21,7 +21,7 @@ const config = loadConfig({ ...process.env, PORT: '0' });
 assertTestDatabase(config.db.database);
 // These tests drive many logins from one process: lift the per-process request and
 // concurrency guards (their defaults are tested in auth-limits.test.js). The DB
-// throttle (5 per IP+username, 20 per username) keeps its real values.
+// throttle (5 per IP+username, 100 per username) keeps its real values.
 const LIMITS = { ipPerMinute: 100_000, maxConcurrentChecks: 100 };
 
 let conn;

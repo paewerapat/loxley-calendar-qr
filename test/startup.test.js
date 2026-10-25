@@ -148,3 +148,22 @@ test('without Passenger: port already in use → "cannot listen: EADDRINUSE", ex
     await new Promise((r) => blocker.close(r));
   }
 });
+
+// Task 04 U4 ----------------------------------------------------------------
+
+test('server allows long uploads: requestTimeout 30 min, headersTimeout stays short', async () => {
+  const code = `const m = require(${JSON.stringify(APP_JS)});
+    console.log('TIMEOUTS=' + m.server.requestTimeout + ',' + m.server.headersTimeout);`;
+  const proc = await runNode(code, {
+    env: passengerEnv(),
+    execArgv: [PRELOAD, '--input-type=commonjs', '-e'],
+    waitFor: /TIMEOUTS=(\d+),(\d+)/,
+  });
+  try {
+    assert.ok(proc.match, `app.js did not report timeouts:\n${proc.stdout}\n${proc.stderr}`);
+    assert.equal(Number(proc.match[1]), 30 * 60 * 1000);
+    assert.ok(Number(proc.match[2]) <= 60 * 1000, `headersTimeout ${proc.match[2]}`);
+  } finally {
+    await proc.kill?.();
+  }
+});

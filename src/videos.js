@@ -10,8 +10,42 @@ export const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 // file name (rule 2), e.g. videos/ecard-lee/1792832980.mp4
 export const MEDIA_KEY_RE = /^videos\/[a-z0-9-]{1,40}\/[0-9]{9,13}\.mp4$/;
 
-const MB = 1024 * 1024;
-export const SIZE_LIMITS = { monthly: 20 * MB, ecard: 100 * MB };
+// Size limits per kind, in MiB (1 MiB = 1,048,576 bytes; a file shown as "20 MB"
+// by any phone or computer fits in 20 MiB). The single source for the CLI, the
+// upload route and the browser (sent to the page via data attributes / JSON).
+const MIB = 1024 * 1024;
+export const SIZE_LIMITS = { monthly: 20 * MIB, ecard: 100 * MIB };
+export const VIDEO_MIME = 'video/mp4';
+
+function sizeText(bytes, mega, kilo) {
+  const n = bytes == null ? NaN : Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return '-';
+  if (n >= MIB) {
+    const v = n / MIB;
+    return `${Number.isInteger(v) ? v : v.toFixed(1)} ${mega}`;
+  }
+  if (n >= 1024) return `${Math.round(n / 1024)} ${kilo}`;
+  return `${n} bytes`;
+}
+
+// For customers (page, API, upload messages): "20 MB", "7.3 MB" — computed in
+// 1024-based units, the way Windows labels sizes, so a file the customer's
+// computer shows as 20 MB always fits the 20 MiB limit.
+export const formatSize = (bytes) => sizeText(bytes, 'MB', 'KB');
+
+// For the operator (CLI messages): exact binary units, "20 MiB".
+export const formatSizeBinary = (bytes) => sizeText(bytes, 'MiB', 'KiB');
+
+// Exact bytes, for messages where rounding would hide the difference.
+export const formatBytes = (bytes) => `${Number(bytes).toLocaleString('en-US')} bytes`;
+
+const BANGKOK = new Intl.DateTimeFormat('th-TH', {
+  timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+});
+// DB times are UTC; people read them in Thai time.
+export function formatBangkok(date) {
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? `${BANGKOK.format(date)} น.` : '-';
+}
 
 export async function findVideo(pool, slug) {
   const [rows] = await pool.query(

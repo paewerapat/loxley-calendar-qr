@@ -6,6 +6,7 @@ import express from 'express';
 import { notFoundPage, errorPage } from './pages.js';
 import { mountVideoRoutes } from './video-routes.js';
 import { mountAdminRoutes } from './admin-routes.js';
+import { describeError } from './log-error.js';
 
 /**
  * @param {object} deps
@@ -52,7 +53,8 @@ export function createApp({ config, pool, extraRoutes, authLimits } = {}) {
   app.use((err, req, res, next) => {
     const raw = Number(err?.status ?? err?.statusCode);
     const status = raw >= 400 && raw < 500 ? raw : 500;
-    if (status === 500) console.error('[error]', err);
+    // Sanitised: never the raw error (mysql2 errors carry the SQL, e.g. a hash).
+    if (status === 500) console.error(`[error] ${describeError(err, { withStack: config.showErrorDetails })}`);
     if (res.headersSent) return next(err); // let Express close the connection
     const detail = config.showErrorDetails ? (err?.stack ?? String(err)) : undefined;
     res.status(status).type('html').send(errorPage({ status, detail }));

@@ -13,8 +13,14 @@ import {
   purgeOldThrottleRows, ThrottleBusyError,
 } from './throttle.js';
 import { createIpLimiter, createSemaphore } from './rate-limit.js';
-import { loginPage, adminHomePage, passwordPage } from './admin-pages.js';
-import { errorPage } from './pages.js';
+import { loginPage, adminVideosPage, passwordPage } from './admin-pages.js';
+import { errorPage, renderMessagePage } from './pages.js';
+import { describeError } from './log-error.js';
+import { adminAssetUrls } from './assets.js';
+import { VIDEO_MIME } from './videos.js';
+import { listVideoRows, getVideoRow, toAdminRow, VideoFileError } from './video-files.js';
+import { handleUpload, cleanupStaleTmp } from './upload.js';
+import { qrTargetUrl, qrPng, qrSvg, qrFileNames, attachmentHeader } from './qr.js';
 
 const MySQLStore = MySQLStoreFactory(session);
 
@@ -40,6 +46,8 @@ export const MSG = {
   sameAsOld: 'รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม',
   mismatch: 'ยืนยันรหัสผ่านใหม่ไม่ตรงกัน',
   changed: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว',
+  publicOriginMissing: 'ยังไม่ได้ตั้งค่า PUBLIC_ORIGIN บนเซิร์ฟเวอร์ ปุ่มดาวน์โหลด QR จึงใช้ไม่ได้ และลิงก์ที่คัดลอกอาจไม่ถูกต้อง'
+    + ' กรุณาแจ้งผู้ดูแลระบบให้ตั้ง PUBLIC_ORIGIN=https://wjasmin.site ใน Plesk แล้ว Restart App',
 };
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -191,6 +199,21 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
     }
   }
 
+  // Public address of the site (for copy-link and QR): PUBLIC_ORIGIN when set,
+  // otherwise this request's own origin.
+  const siteOrigin = (req) => publicOrigin ?? `${req.protocol}://${req.get('host')}`;
+  // In production the QR address must come from PUBLIC_ORIGIN (dev/test may use
+  // the request origin).
+  const qrNeedsPublicOrigin = config.nodeEnv === 'production' && !publicOrigin;
+  const adminRow = (req, row) => {
+    const r = toAdminRow(row);
+    return { ...r, publicUrl: `${siteOrigin(req)}${r.viewPath}` };
+  };
+  const adminAssets = adminAssetUrls(config.publicDir);
+
+  // Temp files left over by a crash or a killed process (older than a day).
+  cleanupStaleTmp(config.storageDir).catch((err) => console.error(`[upload] tmp cleanup failed: ${err.message}`));
+
   const logAttempt = (req, what, outcome) => {
     const line = `[auth] ${what} ${outcome} ip=${req.ip} proto=${req.protocol} secure=${req.secure}`;
     if (outcome === 'ok') console.log(line); else console.warn(line);
@@ -200,8 +223,46 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
   const api = express.Router();
   api.use(noStore, publicScheme, sameOrigin({ json: true }), sessionMiddleware, loadUser);
   api.use((req, res, next) => (req.adminUser ? next() : res.status(401).json({ error: 'unauthorized' })));
-  // Endpoints arrive with task 04.
+
+  // The 14 sets for the back-office page (no storage paths).
+  api.get('/videos', async (req, res) => {
+    const rows = await listVideoRows(pool);
+    res.json({ videos: rows.map((r) => adminRow(req, r)) });
+  });
+
+  // Upload / replace the video of one set (multipart, single field "file").
+  api.post('/videos/:slug', async (req, res) => {
+    const username = req.adminUser.username;
+    let done;
+    try {
+      done = await handleUpload(req, { pool, storageDir: config.storageDir, slug: req.params.slug, username });
+    } catch (err) {
+      if (!(err instanceof VideoFileError)) throw err; // → JSON 500 below
+      if (err.status >= 500) console.error(`[upload] ${req.params.slug}: ${err.code}`);
+      if (!res.headersSent && !res.destroyed) res.status(err.status).json({ code: err.code, message: err.userMessage });
+      return;
+    }
+    // Committed. If reading the fresh row fails, answer with the committed state we
+    // know instead of an error (the upload did succeed).
+    let row;
+    try {
+      row = await getVideoRow(pool, done.slug);
+    } catch (err) {
+      console.error(`[upload] ${done.slug}: committed, but re-reading the row failed (${err.code ?? err.message})`);
+    }
+    row ??= { ...done.video, r2_key: done.key, size_bytes: done.size, updated_at: new Date(), updated_by: username };
+    res.json({ video: adminRow(req, row) });
+  });
+
   api.use((req, res) => res.status(404).json({ error: 'not_found' }));
+  // Unexpected errors under /api/admin answer JSON (the page's script expects it),
+  // never the HTML 500 page.
+  api.use((err, req, res, next) => {
+    console.error(`[api] ${describeError(err, { withStack: config.showErrorDetails })}`);
+    if (res.headersSent) return next(err);
+    if (res.destroyed) return undefined; // client already gone
+    return res.status(500).json({ code: 'internal', message: 'ระบบขัดข้อง กรุณาลองใหม่อีกครั้ง' });
+  });
   app.use('/api/admin', api);
 
   // ---------------------------------------------------------------- /admin*
@@ -251,9 +312,31 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
   // Everything below needs a valid session.
   admin.use((req, res, next) => (req.adminUser ? next() : res.redirect('/admin/login')));
 
-  admin.get('/', (req, res) => {
+  admin.get('/', async (req, res) => {
     const notice = req.query.changed === '1' ? MSG.changed : undefined;
-    res.type('html').send(adminHomePage({ username: req.adminUser.username, notice }));
+    const videos = (await listVideoRows(pool)).map((r) => adminRow(req, r));
+    res.type('html').send(adminVideosPage({
+      username: req.adminUser.username, notice, videos, assets: adminAssets, mime: VIDEO_MIME,
+      warning: qrNeedsPublicOrigin ? MSG.publicOriginMissing : undefined,
+    }));
+  });
+
+  // QR for printing: GET /admin/qr/<slug>.png (2000 px) or .svg (scalable).
+  admin.get('/qr/:file', async (req, res, next) => {
+    const m = /^([a-z0-9-]{1,40})\.(png|svg)$/.exec(req.params.file);
+    if (!m) return next();
+    const row = await getVideoRow(pool, m[1]);
+    if (!row) return next();
+    // A printed QR must never carry a URL built from the request's Host header.
+    if (qrNeedsPublicOrigin) {
+      return res.status(500).type('html').send(renderMessagePage({
+        title: 'ยังสร้าง QR ไม่ได้', heading: 'ยังสร้าง QR Code ไม่ได้', message: MSG.publicOriginMissing,
+      }));
+    }
+    const url = qrTargetUrl(siteOrigin(req), row.slug);
+    res.set('Content-Disposition', attachmentHeader(qrFileNames(row, m[2])));
+    if (m[2] === 'png') return res.type('image/png').send(await qrPng(url));
+    return res.type('image/svg+xml').send(await qrSvg(url));
   });
 
   admin.post('/logout', async (req, res) => {

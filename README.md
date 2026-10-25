@@ -15,9 +15,11 @@ Stack: Node.js 24 (ES modules) + Express + MariaDB (`mysql2`) ไฟล์วี
 | `src/video-routes.js` | หน้า `/v/<slug>` (QR ชี้มาที่นี่) และไฟล์วีดีโอ `/media/videos/<slug>/<epoch>.mp4` (รองรับ Range) |
 | `scripts/migrate.js` | `npm run migrate` |
 | `scripts/video-set.js` | `npm run video:set` ผูกไฟล์วีดีโอใน `STORAGE_DIR` กับชุด |
-| `src/admin-routes.js` | หลังบ้าน `/admin*`, `/api/admin/*`: login, session (เก็บใน DB), กันเดารหัส, ตรวจ Origin, เปลี่ยนรหัสผ่าน |
+| `src/admin-routes.js` | หลังบ้าน `/admin*`, `/api/admin/*`: login, session (เก็บใน DB), กันเดารหัส, ตรวจ Origin, เปลี่ยนรหัสผ่าน, รายการ 14 ชุด, ดาวน์โหลด QR |
+| `src/upload.js` | `POST /api/admin/videos/<slug>` รับไฟล์แบบ stream ลง `STORAGE_DIR/tmp/` แล้วย้ายเป็น `videos/<slug>/<epoch-ms>.mp4` |
+| `src/video-files.js` | ตรวจไฟล์ (ขนาดตามชุด + MP4) และบันทึก DB ใช้ร่วมกันระหว่างหน้าอัปโหลดกับ `video:set` |
 | `scripts/admin.js` | `npm run admin:create` / `admin:reset-password` / `admin:list` |
-| `public/` | ไฟล์ static (Plesk Document Root) ห้ามวางไฟล์อื่นในนี้ `public/assets/player.*` คือ CSS/JS ของหน้าดูวีดีโอ |
+| `public/` | ไฟล์ static (Plesk Document Root) ห้ามวางไฟล์อื่นในนี้ `public/assets/player.*` คือ CSS/JS ของหน้าดูวีดีโอ `public/assets/admin.*` ของหน้าหลังบ้าน |
 
 ## ตั้ง DB ในเครื่อง (MySQL 8.4 / MariaDB)
 
@@ -49,7 +51,7 @@ migration รันซ้ำได้เสมอ ไม่สร้างข้
 
 ## ผูกไฟล์วีดีโอกับชุด (`video:set`)
 
-ใช้จนกว่าหลังบ้านสำหรับอัปโหลดจะเสร็จ วางไฟล์ไว้ใน `STORAGE_DIR` ก่อน (ชื่อไฟล์เป็นเลข epoch ตามกฎ "ชื่อไฟล์มี timestamp") แล้วรัน
+ปกติลูกค้าอัปโหลดเองที่หน้าหลังบ้าน คำสั่งนี้ใช้เมื่อเราวางไฟล์เองผ่าน FTP (เช่นย้าย e-card Lee ตอน deploy ครั้งแรก) วางไฟล์ไว้ใน `STORAGE_DIR` ก่อน (ชื่อไฟล์เป็นเลข epoch ตามกฎ "ชื่อไฟล์มี timestamp") แล้วรัน
 
 ```bash
 npm run video:set -- <slug> videos/<slug>/<epoch>.mp4      # ใช้ env ที่มีอยู่ (บน Plesk)
@@ -57,7 +59,7 @@ npm run video:set:dev -- <slug> videos/<slug>/<epoch>.mp4  # ในเครื�
 ```
 
 - path สัมพัทธ์กับ `STORAGE_DIR` และต้องอยู่ในโฟลเดอร์ของชุดนั้น เช่น `videos/ecard-lee/1792832980.mp4`
-- ตรวจก่อนแก้ DB: slug มีในตาราง, path ถูกรูปแบบ, ไฟล์มีอยู่จริง, เป็น MP4 (มี box `ftyp`), ขนาดไม่เกิน 20MB (monthly) / 100MB (ecard) ผิดข้อไหนจะ exit 1 พร้อมบอกสาเหตุ และไม่แก้ DB
+- ตรวจก่อนแก้ DB (ชุดเดียวกับหน้าอัปโหลด): slug มีในตาราง, path ถูกรูปแบบ, ไฟล์มีอยู่จริง, เป็น MP4 (มี box `ftyp`), ขนาดไม่เกิน 20 MiB (monthly) / 100 MiB (ecard) (1 MiB = 1,048,576 ไบต์) ผิดข้อไหนจะ exit 1 พร้อมบอกสาเหตุ และไม่แก้ DB
 - สำเร็จแล้วอัปเดต `r2_key`, `size_bytes`, `updated_at` (UTC), `updated_by = cli` ไฟล์เก่าไม่ถูกลบ คำสั่งจะพิมพ์ path ของไฟล์เก่าให้ ลบเองผ่าน FTP เมื่อแน่ใจแล้ว
 
 ### ย้าย e-card Lee เข้าแอป (deploy ครั้งแรก)
@@ -71,6 +73,44 @@ npm run video:set:dev -- <slug> videos/<slug>/<epoch>.mp4  # ในเครื�
 5. ลบโฟลเดอร์ `/httpdocs/public/v/ecard-lee/` ผ่าน FTP แล้วเปิด `https://wjasmin.site/v/ecard-lee/` และ `https://wjasmin.site/v/ecard-lee` ต้องได้หน้าจากแอป (เล่นวีดีโอได้ ไม่ redirect) ทดสอบสแกน QR จริงอีกครั้ง
 
 ตรวจสถานะ: `GET /healthz` → `200 {"ok":true,"db":true}` หรือ `503 {"ok":false,"db":false}` ถ้าต่อ DB ไม่ได้
+
+### อัปโหลดผ่านหน้าหลังบ้าน (deploy ครั้งแรก)
+
+- ไฟล์ที่อัปโหลดถูกเขียนลง `STORAGE_DIR/tmp/` ก่อน (`/qr-storage/tmp/` บน server) แล้วย้ายเป็น `videos/<slug>/<epoch-ms>.mp4` ไฟล์เก่าของชุดนั้นถูกลบหลังบันทึก DB สำเร็จ ไฟล์ชั่วคราวที่ค้างเกิน 1 วันถูกลบตอนแอปสตาร์ต
+- หลัง deploy ให้ลองอัปโหลด e-card ขนาดใกล้ 100 MiB จริงหนึ่งครั้ง ถ้าได้ข้อความ "ไฟล์ใหญ่เกิน ..." ทั้งที่ไฟล์ไม่เกิน หรือ log ของ nginx มี **413 Request Entity Too Large** แปลว่า nginx จำกัดขนาด request ต่ำกว่าที่ต้องการ ให้เพิ่มใน Plesk → Apache & nginx Settings → **Additional nginx directives**:
+  ```nginx
+  client_max_body_size 110m;
+  ```
+  - ถ้าทำได้ควรจำกัดเฉพาะ `/api/admin/videos/` แต่ใน Plesk ช่องนี้อยู่ระดับ server และ `location` ที่เขียนเองต้องมีคำสั่งส่งต่อไปแอป (Passenger/proxy) แบบเดียวกับที่ Plesk สร้างให้ ไม่งั้น request จะไม่ถึงแอป จึงแนะนำแบบทั้งเว็บ ซึ่งปลอดภัยเพราะแอปจำกัดขนาดตามชุดเองอยู่แล้ว (20 / 100 MiB) และ request อื่นทั้งหมดเล็กมาก
+  - ถ้าเลือกลองแบบ `location ^~ /api/admin/videos/ { client_max_body_size 110m; ... }` ต้องทดสอบอัปโหลดจริงทันที ถ้าได้ 404/502 ให้ลบออกแล้วใช้แบบทั้งเว็บ
+- ข้อจำกัดเวลา: ถ้าอัปโหลดไฟล์ใหญ่ผ่านเน็ตช้าแล้วหลุดกลางทาง ให้ตรวจ timeout ของ proxy (`proxy_read_timeout`, `client_body_timeout`) ใน Plesk
+
+## คู่มือสำหรับลูกค้า (คัดลอกส่งลูกค้าได้ทั้งหัวข้อ)
+
+> **การเปลี่ยนวีดีโอในปฏิทิน LOXLEY**
+>
+> **1. เข้าสู่ระบบ**
+> เปิด `https://wjasmin.site/admin` บนมือถือหรือคอมพิวเตอร์ ใส่ชื่อผู้ใช้และรหัสผ่านที่ได้รับ ถ้าใส่รหัสผิด 5 ครั้งระบบจะล็อก 15 นาที ถ้าลืมรหัสผ่านให้ติดต่อผู้ดูแล
+>
+> **2. รายการวีดีโอ**
+> หน้าแรกแสดงวีดีโอทั้ง 14 ชุด (มกราคม–ธันวาคม และ e-card 2 ชุด) แต่ละชุดบอกว่า "มีวีดีโอแล้ว" หรือ "ยังไม่มีวีดีโอ" ขนาดไฟล์ และเวลาที่อัปเดตล่าสุด (เวลาไทย)
+>
+> **3. อัปโหลดหรือเปลี่ยนวีดีโอ**
+> กดปุ่ม "อัปโหลดวีดีโอ" หรือ "เปลี่ยนวีดีโอ" ของชุดที่ต้องการ แล้วเลือกไฟล์ จะเห็นแถบความคืบหน้าเป็น % ระหว่างอัปโหลดอย่าปิดหน้าเว็บ กด "ยกเลิก" ได้ถ้าเลือกไฟล์ผิด เสร็จแล้วจะขึ้น "อัปโหลดเรียบร้อยแล้ว" วีดีโอใหม่แสดงทันที QR Code เดิมที่พิมพ์ไปแล้วยังใช้ได้ ไม่ต้องพิมพ์ใหม่
+>
+> **4. ไฟล์ที่รับได้**
+> - ไฟล์วีดีโอ **MP4** (.mp4) เท่านั้น
+> - วีดีโอรายเดือน ไม่เกิน **20 MB**
+> - e-card ไม่เกิน **100 MB**
+> - ถ้าไฟล์ใหญ่เกิน ระบบจะแจ้งก่อนส่ง ให้บีบอัดไฟล์หรือติดต่อผู้ดูแล
+>
+> **5. ดูตัวอย่าง คัดลอกลิงก์ และดาวน์โหลด QR**
+> - "ดูตัวอย่าง" เปิดหน้าที่คนสแกน QR จะเห็น
+> - "คัดลอกลิงก์" คัดลอกลิงก์ของชุดนั้นไปวางในแชทหรืออีเมล
+> - "QR (PNG)" สำหรับใช้ทั่วไปและงานพิมพ์ (ภาพกว้าง 2000 พิกเซล) "QR (SVG)" สำหรับโรงพิมพ์ (ขยายได้ไม่แตก) ชื่อไฟล์บอกชุด เช่น `QR-01-มกราคม.png`
+>
+> **6. เปลี่ยนรหัสผ่าน และออกจากระบบ**
+> กด "เปลี่ยนรหัสผ่าน" ที่ด้านบน ใส่รหัสเดิม รหัสใหม่ (อย่างน้อย 10 ตัวอักษร) และยืนยันรหัสใหม่ เมื่อใช้เสร็จบนเครื่องที่ใช้ร่วมกับคนอื่นให้กด "ออกจากระบบ" ทุกครั้ง ถ้าไม่ได้ใช้งาน 8 ชั่วโมงระบบจะออกจากระบบให้เอง
 
 ## หลังบ้าน: ผู้ใช้และรหัสผ่าน
 
@@ -147,7 +187,7 @@ npm run admin:list                           # username, created_at, last_login_
 | `NODE_ENV` | ไม่ | Plesk ตั้งให้จาก Application Mode = `production` แสดง stack trace เฉพาะเมื่อตั้งเป็น `development` ตรง ๆ (ไม่ตั้ง = ไม่แสดง) |
 | `SESSION_SECRET` | ใช่ (เฉพาะแอป) | ใช้เซ็น cookie ของ session ยาวอย่างน้อย 32 ตัวอักษร สร้างด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` (ได้ 64 ตัว hex) ใช้ค่าแยกกันระหว่างเครื่อง dev กับ production ถ้าเปลี่ยนค่า ทุกคนจะหลุดจากระบบ คำสั่ง CLI (`migrate`, `video:set`, `admin:*`) ไม่ต้องใช้ |
 | `COOKIE_SECURE` | ไม่ | `true` / `false` ถ้าไม่ตั้ง: `true` เสมอ ยกเว้น `NODE_ENV=development` ในเครื่องที่เปิดผ่าน `http://localhost` ต้องเป็น `false` ไม่งั้นเบราว์เซอร์จะไม่เก็บ cookie (`.env.dev` / `.env.test` ตั้งไว้แล้ว) |
-| `PUBLIC_ORIGIN` | แนะนำบน Plesk | `https://wjasmin.site` ถ้าตั้ง: การตรวจ CSRF เทียบ `Origin`/`Referer` กับค่านี้ตรง ๆ (scheme + host + port) แทนการเชื่อ header จาก proxy และถ้าเป็น https แอปจะออก cookie แบบ Secure ได้แม้ nginx ไม่ส่ง `X-Forwarded-Proto` ในเครื่องไม่ต้องตั้ง |
+| `PUBLIC_ORIGIN` | ต้องตั้งบน Plesk | `https://wjasmin.site` ถ้าตั้ง: การตรวจ CSRF เทียบ `Origin`/`Referer` กับค่านี้ตรง ๆ (scheme + host + port) แทนการเชื่อ header จาก proxy และถ้าเป็น https แอปจะออก cookie แบบ Secure ได้แม้ nginx ไม่ส่ง `X-Forwarded-Proto` ใช้เป็นที่อยู่ใน QR Code และลิงก์ที่คัดลอกด้วย ถ้า `NODE_ENV=production` แต่ไม่ได้ตั้ง ปุ่มดาวน์โหลด QR จะแจ้งให้ตั้งค่าแทน (กัน QR ที่ชี้ไปโดเมนผิด) และหน้า `/admin` จะขึ้นคำเตือน ในเครื่องไม่ต้องตั้ง |
 | `PORT` | ไม่ต้องตั้งบน Plesk | บน Plesk Passenger จัดการการ listen เอง แอปจะไม่ใช้ `PORT` ส่วนในเครื่องมาจาก `.env.dev` (รัน `node app.js` นอก Passenger ต้องมี `PORT`) |
 
 ค่าที่อ่านจาก env จะตัดช่องว่างและ `\r` (CRLF) ออกให้

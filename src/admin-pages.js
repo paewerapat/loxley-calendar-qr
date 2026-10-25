@@ -65,18 +65,75 @@ ${alertBox(error)}
   });
 }
 
-export function adminHomePage({ username, notice } = {}) {
-  return layout({
-    title: 'หลังบ้าน',
-    body: `<h1>หลังบ้าน</h1>
+// --- /admin: the 14 sets -------------------------------------------------------------
+// Mobile first (cards, no horizontal scrolling). Behaviour (copy link, browser-side
+// checks, XHR upload with progress) lives in public/assets/admin.js; the size limit
+// and accepted type come from the server through data attributes.
+
+function videoCard(v) {
+  const e = escapeHtml;
+  return `<li class="video" data-slug="${e(v.slug)}" data-limit-bytes="${e(v.limitBytes)}" data-limit-label="${e(v.limitLabel)}">
+  <div class="video-head">
+    <h2>${e(v.title)}</h2>
+    <span class="status ${v.hasVideo ? 'status-ok' : 'status-none'}" data-field="status">${e(v.statusLabel)}</span>
+  </div>
+  <dl class="meta">
+    <div><dt>ขนาด</dt><dd data-field="size">${e(v.sizeLabel)}</dd></div>
+    <div><dt>อัปเดตล่าสุด</dt><dd data-field="updated">${e(v.updatedText)}</dd></div>
+    <div><dt>รับไฟล์</dt><dd>MP4 ไม่เกิน ${e(v.limitLabel)}</dd></div>
+  </dl>
+  <div class="actions">
+    <a class="btn" href="${e(v.viewPath)}" target="_blank" rel="noopener">ดูตัวอย่าง</a>
+    <button type="button" class="btn" data-action="copy" data-url="${e(v.publicUrl)}">คัดลอกลิงก์</button>
+    <a class="btn" href="${e(v.qrPng)}" download>QR (PNG)</a>
+    <a class="btn" href="${e(v.qrSvg)}" download>QR (SVG)</a>
+    <label class="btn btn-primary" data-field="upload-label">
+      <span data-field="upload-text">${v.hasVideo ? 'เปลี่ยนวีดีโอ' : 'อัปโหลดวีดีโอ'}</span>
+      <input type="file" class="visually-hidden" accept="video/mp4,.mp4" data-action="upload">
+    </label>
+  </div>
+  <div class="progress" data-field="progress" hidden>
+    <progress max="100" value="0" data-field="bar"></progress>
+    <span data-field="percent">0%</span>
+    <button type="button" class="btn" data-action="cancel">ยกเลิก</button>
+  </div>
+  <p class="msg" role="status" aria-live="polite" data-field="message"></p>
+</li>`;
+}
+
+export function adminVideosPage({ username, notice, warning, videos, assets, mime }) {
+  const limits = [...new Map(videos.map((v) => [v.kind, v.limitLabel])).entries()]
+    .map(([kind, label]) => `${kind === 'monthly' ? 'วีดีโอรายเดือน' : 'e-card'} ไม่เกิน ${escapeHtml(label)}`)
+    .join(', ');
+  return `<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>หลังบ้าน - จัดการวีดีโอ</title>
+<link rel="stylesheet" href="${escapeHtml(assets.css)}">
+<script src="${escapeHtml(assets.js)}" defer></script>
+</head>
+<body>
+<main class="admin" id="admin" data-mime="${escapeHtml(mime)}">
+<header class="top">
+  <h1>จัดการวีดีโอ</h1>
+  <p>เข้าสู่ระบบในชื่อ <strong>${escapeHtml(username)}</strong></p>
+  <nav class="top-actions">
+    <a href="/admin/password">เปลี่ยนรหัสผ่าน</a>
+    <form method="post" action="/admin/logout"><button type="submit" class="btn">ออกจากระบบ</button></form>
+  </nav>
+</header>
+${warning ? `<p class="warning" role="alert">${escapeHtml(warning)}</p>` : ''}
 ${noticeBox(notice)}
-<p>เข้าสู่ระบบในชื่อ <strong>${escapeHtml(username)}</strong></p>
-<p>รายการวีดีโอและการอัปโหลดจะเปิดให้ใช้งานเร็ว ๆ นี้</p>
-<div class="row">
-  <a href="/admin/password">เปลี่ยนรหัสผ่าน</a>
-  <form method="post" action="/admin/logout"><button type="submit" class="secondary">ออกจากระบบ</button></form>
-</div>`,
-  });
+<p class="hint">อัปโหลดได้เฉพาะไฟล์ MP4 (${limits}) QR Code พิมพ์ครั้งเดียวใช้ได้ตลอด เปลี่ยนวีดีโอแล้ว QR เดิมจะเปิดวีดีโอใหม่ทันที</p>
+<ul class="videos">
+${videos.map(videoCard).join('\n')}
+</ul>
+</main>
+</body>
+</html>`;
 }
 
 export function passwordPage({ error } = {}) {

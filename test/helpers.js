@@ -21,7 +21,7 @@ export function assertTestDatabase(dbName) {
 // parallel processes, and some of them drop/recreate tables. Hold this lock on a
 // dedicated connection for the whole file (released when the connection ends).
 export async function acquireDbSuiteLock(conn) {
-  const [[row]] = await conn.query("SELECT GET_LOCK(CONCAT(DATABASE(), ':test-suite'), 120) AS locked");
+  const [[row]] = await conn.query("SELECT GET_LOCK(CONCAT(DATABASE(), ':test-suite'), 900) AS locked");
   if (Number(row.locked) !== 1) throw new Error('Could not acquire the test DB lock');
 }
 
@@ -44,7 +44,7 @@ export class Browser {
     this.setCookies = [];
   }
 
-  async request(p, { method = 'GET', form, headers = {}, origin } = {}) {
+  async request(p, { method = 'GET', form, body: rawBody, headers = {}, origin } = {}) {
     const h = { ...headers };
     if (this.cookie) h.cookie = this.cookie;
     if (this.ip) h['x-forwarded-for'] = this.ip;
@@ -54,7 +54,7 @@ export class Browser {
     } else if (unsafe) {
       h.origin = this.base;
     }
-    let body;
+    let body = rawBody; // e.g. FormData (fetch sets the multipart boundary)
     if (form) {
       body = new URLSearchParams(form).toString();
       h['content-type'] = 'application/x-www-form-urlencoded';
@@ -72,6 +72,14 @@ export class Browser {
   get(p, opts) { return this.request(p, opts); }
   post(p, form, opts = {}) { return this.request(p, { ...opts, method: 'POST', form }); }
   login(username, password, opts) { return this.post('/admin/login', { username, password }, opts); }
+
+  /** Multipart upload like the back-office page: files = [{ blob, name }]. */
+  upload(p, files, { fields = {}, ...opts } = {}) {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    for (const f of files) fd.append(f.field ?? 'file', f.blob, f.name);
+    return this.request(p, { ...opts, method: 'POST', body: fd });
+  }
 }
 
 // Temp STORAGE_DIR for tests (never inside the repo, never committed).
@@ -157,6 +165,7 @@ export function runNode(script, { env, cwd = APP_ROOT, waitFor, timeoutMs = 1500
       if (m) {
         finish({
           match: m,
+          pid: child.pid,
           get stdout() { return stdout; },
           get stderr() { return stderr; },
           kill: () => new Promise((r) => {

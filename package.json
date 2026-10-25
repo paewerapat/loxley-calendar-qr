@@ -25,14 +25,20 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "busboy": "^1.6.0",
     "express": "^5.3.0",
     "express-mysql-session": "^3.0.3",
     "express-session": "^1.19.0",
-    "mysql2": "^3.24.6"
+    "mysql2": "^3.24.6",
+    "qrcode": "^1.5.4"
   },
   "overrides": {
     "express-mysql-session": {
       "mysql2": "$mysql2"
     }
+  },
+  "devDependencies": {
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0"
   }
 }

@@ -117,9 +117,9 @@ const FAILURES = [
   ['not an MP4 (no ftyp)', 'm01', 'videos/m01/1792822222.mp4', /ไม่ใช่ MP4/],
   // Exact bytes for both numbers (no "20.0MB over 20.0MB").
   ['monthly over 20MB', 'm01', 'videos/m01/1792833333.mp4',
-    /ใหญ่เกินกำหนด: 20,971,521 bytes \(ชุด monthly รับได้ไม่เกิน 20,971,520 bytes = 20MB\)/],
+    /ใหญ่เกินกำหนด: 20,971,521 bytes \(ชุด monthly รับได้ไม่เกิน 20,971,520 bytes = 20 MiB\)/],
   ['e-card over 100MB', 'ecard-lee', 'videos/ecard-lee/1792844444.mp4',
-    /ใหญ่เกินกำหนด: 104,857,601 bytes \(ชุด ecard รับได้ไม่เกิน 104,857,600 bytes = 100MB\)/],
+    /ใหญ่เกินกำหนด: 104,857,601 bytes \(ชุด ecard รับได้ไม่เกิน 104,857,600 bytes = 100 MiB\)/],
 ];
 
 async function prepareFailureFiles() {

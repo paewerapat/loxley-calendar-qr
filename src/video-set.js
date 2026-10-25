@@ -1,8 +1,10 @@
 // Logic behind `npm run video:set -- <slug> <path>`: point a video row at a file that
 // is already in STORAGE_DIR (e.g. uploaded by FTP). Every check runs before the
-// single UPDATE, so a failed check never changes the database. Old files are kept.
+// database write, so a failed check never changes the database. Old files are kept.
+// The checks and the write are shared with the back-office upload (video-files.js).
 
-import { findVideo, resolveMediaFile, hasFtypBox, SLUG_RE, MEDIA_KEY_RE, SIZE_LIMITS } from './videos.js';
+import { findVideo, resolveMediaFile, SLUG_RE, MEDIA_KEY_RE } from './videos.js';
+import { checkVideoFile, commitVideoFile, VideoFileError } from './video-files.js';
 
 export class VideoSetError extends Error {
   constructor(message) {
@@ -10,10 +12,6 @@ export class VideoSetError extends Error {
     this.name = 'VideoSetError';
   }
 }
-
-// Exact byte counts: rounding to MB would print e.g. "20.0MB over 20.0MB".
-const fmtBytes = (bytes) => `${bytes.toLocaleString('en-US')} bytes`;
-const fmtLimit = (bytes) => `${fmtBytes(bytes)} = ${bytes / (1024 * 1024)}MB`;
 
 /**
  * @returns {Promise<{ slug: string, key: string, size: number, previousKey: string|null }>}
@@ -36,19 +34,12 @@ export async function setVideo({ pool, storageDir, slug, key, updatedBy = 'cli' 
   const media = await resolveMediaFile(storageDir, key);
   if (!media) throw new VideoSetError(`ไม่พบไฟล์ ${key} ใน STORAGE_DIR (หรือไม่ใช่ไฟล์ปกติ)`);
 
-  const limit = SIZE_LIMITS[video.kind];
-  if (!limit) throw new VideoSetError(`ไม่รู้จัก kind ${video.kind} ของชุด ${slug}`);
-  if (media.size > limit) {
-    throw new VideoSetError(`ไฟล์ใหญ่เกินกำหนด: ${fmtBytes(media.size)} (ชุด ${video.kind} รับได้ไม่เกิน ${fmtLimit(limit)})`);
+  try {
+    await checkVideoFile({ kind: video.kind, file: media.file, size: media.size, label: `ไฟล์ ${key}` });
+    const { previousKey } = await commitVideoFile(pool, { slug, key, size: media.size, updatedBy });
+    return { slug, key, size: media.size, previousKey };
+  } catch (err) {
+    if (err instanceof VideoFileError) throw new VideoSetError(err.message);
+    throw err;
   }
-  if (!(await hasFtypBox(media.file))) {
-    throw new VideoSetError(`ไฟล์ ${key} ไม่ใช่ MP4 (ไม่พบ box ftyp ที่ต้นไฟล์)`);
-  }
-
-  await pool.query(
-    'UPDATE videos SET r2_key = ?, size_bytes = ?, updated_at = UTC_TIMESTAMP(), updated_by = ? WHERE slug = ?',
-    [key, media.size, updatedBy, slug],
-  );
-
-  return { slug, key, size: media.size, previousKey: video.r2_key ?? null };
 }

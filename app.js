@@ -30,6 +30,9 @@ export { createApp };
 
 // Keep our own reference instead of relying on what listen() returns.
 export const server = http.createServer(app);
+// A 100 MB e-card over a slow mobile connection can take well over Node's default
+// 5-minute request timeout. Headers must still arrive quickly (default 60 s).
+server.requestTimeout = 30 * 60 * 1000;
 
 const mode = `NODE_ENV=${config.nodeEnv ?? 'unset'}`;
 
