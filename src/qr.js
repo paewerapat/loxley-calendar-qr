@@ -18,6 +18,17 @@ export function qrSvg(url) {
   return QRCode.toString(url, { ...QR_OPTIONS, type: 'svg' });
 }
 
+// Small preview on the admin page: the very same SVG as the download (same URL,
+// same options), inlined in the HTML. Cached: one entry per set and origin.
+const inlineCache = new Map();
+export async function qrInlineSvg(url) {
+  if (!inlineCache.has(url)) {
+    if (inlineCache.size > 200) inlineCache.clear();
+    inlineCache.set(url, (await qrSvg(url)).replace(' xmlns="http://www.w3.org/2000/svg"', ''));
+  }
+  return inlineCache.get(url);
+}
+
 const UNSAFE = /[\\/:*?"<>|\u0000-\u001f\u007f]+/g;
 const clean = (s) => String(s).replace(UNSAFE, '-').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 const ascii = (s) => clean(s).replace(/[^\x20-\x7e]/g, '');

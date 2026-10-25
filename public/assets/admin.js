@@ -47,6 +47,39 @@
     field(card, 'size').textContent = v.sizeLabel;
     field(card, 'updated').textContent = v.updatedText;
     field(card, 'upload-text').textContent = v.hasVideo ? 'เปลี่ยนวีดีโอ' : 'อัปโหลดวีดีโอ';
+    // Card look: green border + check mark on the QR once the set has a video.
+    card.dataset.hasVideo = v.hasVideo ? 'true' : 'false';
+    card.dataset.fileMissing = v.fileMissing ? 'true' : 'false';
+    const check = field(card, 'qr-check');
+    if (check) check.hidden = !v.hasVideo;
+    const missing = field(card, 'file-missing'); // "ไฟล์วีดีโอหาย" goes away after an upload
+    if (missing) missing.hidden = !v.fileMissing;
+    updateSummary();
+  }
+
+  // "มีวีดีโอแล้ว X / 14 ชุด" + its bar, recounted from the cards.
+  function updateSummary() {
+    let done = 0;
+    for (const card of cards()) if (card.dataset.hasVideo === 'true') done += 1;
+    const count = document.getElementById('summary-done');
+    const bar = document.getElementById('summary-bar');
+    if (count) count.textContent = String(done);
+    if (bar) {
+      bar.value = done;
+      if (bar.setAttribute) bar.setAttribute('aria-label', `มีวีดีโอแล้ว ${done} จาก ${bar.max} ชุด`);
+    }
+  }
+
+  let toastTimer;
+  function toast(text) {
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = false;
+    if (typeof setTimeout === 'function') {
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.hidden = true; }, 2500);
+    }
   }
 
   // Same rules as the server: MP4 only, size within the limit of this set.
@@ -140,6 +173,7 @@
     try {
       await navigator.clipboard.writeText(url);
       say(card, MSG.copied, 'ok');
+      toast(MSG.copied);
     } catch {
       window.prompt('คัดลอกลิงก์นี้', url); // older browsers / no clipboard permission
     }

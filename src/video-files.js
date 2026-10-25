@@ -98,9 +98,13 @@ export async function getVideoRow(pool, slug) {
  * What the back office needs about one set: no storage paths, sizes and times
  * already formatted for people (Thai time), limits for the browser-side check.
  */
-export function toAdminRow(row) {
+export function toAdminRow(row, { fileExists = Boolean(row.r2_key) } = {}) {
   const limit = SIZE_LIMITS[row.kind] ?? null;
-  const hasVideo = Boolean(row.r2_key);
+  // Same rule as /v/<slug>: a set "has a video" only when its file is really there.
+  // A key whose file is gone (deleted by hand, bad restore...) is flagged so the
+  // back office can ask for a new upload.
+  const hasVideo = Boolean(row.r2_key) && fileExists;
+  const fileMissing = Boolean(row.r2_key) && !fileExists;
   const updatedAt = row.updated_at instanceof Date ? row.updated_at : null;
   return {
     slug: row.slug,
@@ -108,6 +112,7 @@ export function toAdminRow(row) {
     kind: row.kind,
     sortOrder: row.sort_order,
     hasVideo,
+    fileMissing,
     statusLabel: hasVideo ? 'มีวีดีโอแล้ว' : 'ยังไม่มีวีดีโอ',
     sizeBytes: hasVideo && row.size_bytes != null ? Number(row.size_bytes) : null,
     sizeLabel: hasVideo && row.size_bytes != null ? formatSize(row.size_bytes) : '-',

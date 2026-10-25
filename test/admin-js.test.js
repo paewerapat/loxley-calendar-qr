@@ -47,8 +47,11 @@ function makeCard(slug, kind) {
   return card;
 }
 
-function setup({ ping = 200 } = {}) {
+function setup({ ping = 200, page = null } = {}) {
   const cards = [makeCard('m01', 'monthly'), makeCard('ecard-lee', 'ecard')];
+  if (page) { // task 05 page parts: check mark per card, summary, toast
+    for (const c of cards) { c.fields['qr-check'] = el({}, { hidden: true }); c.dataset.hasVideo = 'false'; }
+  }
   const root = {
     dataset: { mime: 'video/mp4' },
     querySelectorAll: (sel) => { assert.equal(sel, '[data-slug]'); return cards; },
@@ -68,7 +71,8 @@ function setup({ ping = 200 } = {}) {
   const fetches = [];
   const clipboard = [];
   const ctx = {
-    document: { getElementById: (id) => (id === 'admin' ? root : null) },
+    document: { getElementById: (id) => (id === 'admin' ? root : page?.[id] ?? null) },
+    ...(page ? { setTimeout: (fn) => { page.timers.push(fn); return page.timers.length; }, clearTimeout: () => {} } : {}),
     XMLHttpRequest: FakeXHR,
     FormData: FakeFormData,
     fetch: async (url, opts) => { fetches.push({ url, opts }); return { status: ping }; },
@@ -211,4 +215,56 @@ test('copy link uses the clipboard', async () => {
   await flush();
   assert.deepEqual(clipboard, ['https://site.example/v/m01']);
   assert.equal(cards[0].fields.message.textContent, 'คัดลอกลิงก์แล้ว');
+});
+
+// Task 05 ---------------------------------------------------------------------
+
+function pageParts() {
+  return {
+    'summary-done': el(),
+    'summary-bar': el({}, { value: 0, max: 14 }),
+    toast: el({}, { hidden: true }),
+    timers: [],
+  };
+}
+
+test('after a successful upload: green state + check mark on the QR, summary count goes up, no reload', async () => {
+  const page = pageParts();
+  const { cards, xhrs } = setup({ page });
+  const [m01, ecard] = cards;
+  ecard.dataset.hasVideo = 'true'; // e.g. production today: e-card Lee already has a video
+  await pick(m01, file('a.mp4', 'video/mp4', 10));
+  xhrs[0].respond(200, { video: { statusLabel: 'มีวีดีโอแล้ว', hasVideo: true, sizeLabel: '10 bytes', updatedText: 'x' } });
+  assert.equal(m01.dataset.hasVideo, 'true');
+  assert.equal(m01.fields['qr-check'].hidden, false, 'check mark shown');
+  assert.equal(m01.fields.status.className, 'status status-ok');
+  assert.equal(page['summary-done'].textContent, '2');
+  assert.equal(page['summary-bar'].value, 2);
+  assert.equal(page['summary-bar'].attrs['aria-label'], 'มีวีดีโอแล้ว 2 จาก 14 ชุด');
+});
+
+test('copy link also shows a toast "คัดลอกลิงก์แล้ว" that hides itself', async () => {
+  const page = pageParts();
+  const { cards, clipboard } = setup({ page });
+  cards[0].actions.copy.fire('click');
+  await flush();
+  assert.deepEqual(clipboard, ['https://site.example/v/m01']);
+  assert.equal(page.toast.textContent, 'คัดลอกลิงก์แล้ว');
+  assert.equal(page.toast.hidden, false);
+  page.timers.at(-1)();
+  assert.equal(page.toast.hidden, true);
+});
+
+test('a card whose file was missing loses the warning after a successful upload', async () => {
+  const page = pageParts();
+  const { cards, xhrs } = setup({ page });
+  const [m01] = cards;
+  m01.dataset.fileMissing = 'true';
+  m01.fields['file-missing'] = el({}, { hidden: false });
+  await pick(m01, file('a.mp4', 'video/mp4', 10));
+  xhrs[0].respond(200, { video: { statusLabel: 'มีวีดีโอแล้ว', hasVideo: true, fileMissing: false, sizeLabel: '10 bytes', updatedText: 'x' } });
+  assert.equal(m01.dataset.fileMissing, 'false');
+  assert.equal(m01.fields['file-missing'].hidden, true);
+  assert.equal(m01.fields['qr-check'].hidden, false);
+  assert.equal(page['summary-done'].textContent, '1');
 });

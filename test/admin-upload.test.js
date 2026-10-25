@@ -21,7 +21,7 @@ import { contentHash } from '../src/assets.js';
 import { SIZE_LIMITS } from '../src/videos.js';
 import { cleanupStaleTmp } from '../src/upload.js';
 import {
-  assertTestDatabase, acquireDbSuiteLock, resetTestDatabase, startServer, Browser, makeTempStorage, fakeMp4Bytes,
+  assertTestDatabase, acquireDbSuiteLock, resetTestDatabase, startServer, Browser, makeTempStorage, fakeMp4Bytes, writeStorageFile,
 } from './helpers.js';
 
 const LIMITS = { ipPerMinute: 100_000, maxConcurrentChecks: 100 };
@@ -97,6 +97,7 @@ async function assertNothingStored(slug) {
 // ---------------------------------------------------------------- AC1 page
 
 test('AC1: /admin lists the 14 sets in sort_order with status, size, links, QR and upload', async () => {
+  await writeStorageFile(storage, 'videos/m02/1792832980123.mp4', fakeMp4Bytes(100)); // the file must exist
   await conn.query(
     "UPDATE videos SET r2_key = 'videos/m02/1792832980123.mp4', size_bytes = 7654321, updated_at = '2026-10-25 10:00:00', updated_by = 'client' WHERE slug = 'm02'",
   );
@@ -117,10 +118,12 @@ test('AC1: /admin lists the 14 sets in sort_order with status, size, links, QR a
 
   const card = (slug) => html.split('<li class="video"').find((c) => c.startsWith(` data-slug="${slug}"`));
   const m01 = card('m01');
-  assert.match(m01, /<h2>มกราคม 2570<\/h2>/);
+  // Task 05: set titles are <h3> under the "วีดีโอรายเดือน" / "e-card" <h2> groups,
+  // and the view link reads "ดูวีดีโอ" with an icon in front.
+  assert.match(m01, /<h3>มกราคม 2570<\/h3>/);
   assert.match(m01, /ยังไม่มีวีดีโอ/);
   assert.match(m01, new RegExp(`data-limit-bytes="${SIZE_LIMITS.monthly}" data-limit-label="20 MB"`));
-  assert.match(m01, /<a class="btn" href="\/v\/m01" target="_blank" rel="noopener">ดูตัวอย่าง<\/a>/);
+  assert.match(m01, /<a class="btn" href="\/v\/m01" target="_blank" rel="noopener"><svg[^>]*>.*?<\/svg>ดูวีดีโอ<\/a>/);
   assert.match(m01, new RegExp(`data-action="copy" data-url="${srv.url}/v/m01"`));
   assert.match(m01, /href="\/admin\/qr\/m01\.png" download/);
   assert.match(m01, /href="\/admin\/qr\/m01\.svg" download/);
@@ -154,6 +157,7 @@ test('AC2: admin.css / admin.js are served with ?v=<content hash> like the playe
 // ---------------------------------------------------------------- AC6 list API
 
 test('AC6: GET /api/admin/videos returns the 14 sets without internal paths', async () => {
+  await writeStorageFile(storage, 'videos/m01/1792832980123.mp4', fakeMp4Bytes(1000));
   await conn.query("UPDATE videos SET r2_key = 'videos/m01/1792832980123.mp4', size_bytes = 1000, updated_at = UTC_TIMESTAMP(), updated_by = 'x' WHERE slug = 'm01'");
   const res = await b.get('/api/admin/videos');
   assert.equal(res.status, 200);
@@ -161,7 +165,7 @@ test('AC6: GET /api/admin/videos returns the 14 sets without internal paths', as
   const { videos } = await res.json();
   assert.equal(videos.length, 14);
   assert.deepEqual(Object.keys(videos[0]).sort(), [
-    'hasVideo', 'kind', 'limitBytes', 'limitLabel', 'publicUrl', 'qrPng', 'qrSvg', 'sizeBytes', 'sizeLabel', 'slug',
+    'fileMissing', 'hasVideo', 'kind', 'limitBytes', 'limitLabel', 'publicUrl', 'qrPng', 'qrSvg', 'sizeBytes', 'sizeLabel', 'slug',
     'sortOrder', 'statusLabel', 'title', 'updatedAt', 'updatedAtLabel', 'updatedBy', 'updatedText', 'viewPath',
   ]);
   const text = JSON.stringify(videos);

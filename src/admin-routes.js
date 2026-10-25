@@ -17,10 +17,10 @@ import { loginPage, adminVideosPage, passwordPage } from './admin-pages.js';
 import { errorPage, renderMessagePage } from './pages.js';
 import { describeError } from './log-error.js';
 import { adminAssetUrls } from './assets.js';
-import { VIDEO_MIME } from './videos.js';
+import { VIDEO_MIME, resolveMediaFile } from './videos.js';
 import { listVideoRows, getVideoRow, toAdminRow, VideoFileError } from './video-files.js';
 import { handleUpload, cleanupStaleTmp } from './upload.js';
-import { qrTargetUrl, qrPng, qrSvg, qrFileNames, attachmentHeader } from './qr.js';
+import { qrTargetUrl, qrPng, qrSvg, qrFileNames, attachmentHeader, qrInlineSvg } from './qr.js';
 
 const MySQLStore = MySQLStoreFactory(session);
 
@@ -205,10 +205,16 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
   // In production the QR address must come from PUBLIC_ORIGIN (dev/test may use
   // the request origin).
   const qrNeedsPublicOrigin = config.nodeEnv === 'production' && !publicOrigin;
-  const adminRow = (req, row) => {
-    const r = toAdminRow(row);
+  const adminRow = (req, row, fileExists) => {
+    const r = toAdminRow(row, fileExists === undefined ? undefined : { fileExists });
     return { ...r, publicUrl: `${siteOrigin(req)}${r.viewPath}` };
   };
+  // List rows with the real state of each file (one stat per set; 14 sets), the
+  // same check /v/<slug> makes before showing the player.
+  const listAdminRows = async (req) => Promise.all((await listVideoRows(pool)).map(async (row) => {
+    const exists = row.r2_key ? Boolean(await resolveMediaFile(config.storageDir, row.r2_key)) : false;
+    return adminRow(req, row, exists);
+  }));
   const adminAssets = adminAssetUrls(config.publicDir);
 
   // Temp files left over by a crash or a killed process (older than a day).
@@ -226,8 +232,7 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
 
   // The 14 sets for the back-office page (no storage paths).
   api.get('/videos', async (req, res) => {
-    const rows = await listVideoRows(pool);
-    res.json({ videos: rows.map((r) => adminRow(req, r)) });
+    res.json({ videos: await listAdminRows(req) });
   });
 
   // Upload / replace the video of one set (multipart, single field "file").
@@ -251,7 +256,7 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
       console.error(`[upload] ${done.slug}: committed, but re-reading the row failed (${err.code ?? err.message})`);
     }
     row ??= { ...done.video, r2_key: done.key, size_bytes: done.size, updated_at: new Date(), updated_by: username };
-    res.json({ video: adminRow(req, row) });
+    res.json({ video: adminRow(req, row, true) }); // the file was just written
   });
 
   api.use((req, res) => res.status(404).json({ error: 'not_found' }));
@@ -269,7 +274,7 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
   const admin = express.Router();
   admin.use(noStore, publicScheme, sameOrigin({ json: false }), sessionMiddleware, parseForm, loadUser);
 
-  const renderLogin = (res, status, opts) => res.status(status).type('html').send(loginPage(opts));
+  const renderLogin = (res, status, opts) => res.status(status).type('html').send(loginPage({ ...opts, assets: adminAssets }));
 
   admin.get('/login', (req, res) => {
     if (req.adminUser) return res.redirect('/admin');
@@ -314,7 +319,11 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
 
   admin.get('/', async (req, res) => {
     const notice = req.query.changed === '1' ? MSG.changed : undefined;
-    const videos = (await listVideoRows(pool)).map((r) => adminRow(req, r));
+    const videos = await Promise.all((await listAdminRows(req)).map(async (v) => {
+      // Same rule as the QR download: no PUBLIC_ORIGIN in production → no QR.
+      if (!qrNeedsPublicOrigin) v.qrInline = await qrInlineSvg(qrTargetUrl(siteOrigin(req), v.slug));
+      return v;
+    }));
     res.type('html').send(adminVideosPage({
       username: req.adminUser.username, notice, videos, assets: adminAssets, mime: VIDEO_MIME,
       warning: qrNeedsPublicOrigin ? MSG.publicOriginMissing : undefined,
@@ -345,7 +354,7 @@ export function mountAdminRoutes(app, { config, pool, limits: overrides = {} }) 
     res.redirect('/admin/login');
   });
 
-  const renderPassword = (res, status, error) => res.status(status).type('html').send(passwordPage({ error }));
+  const renderPassword = (res, status, error) => res.status(status).type('html').send(passwordPage({ error, assets: adminAssets }));
 
   admin.get('/password', (req, res) => renderPassword(res, 200));
 

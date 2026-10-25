@@ -90,9 +90,13 @@ test('GET /admin/login: Thai form, no-store, noindex, and no session/cookie for 
   assert.match(html, /<form method="post" action="\/admin\/login">/);
   assert.match(html, /ชื่อผู้ใช้/);
   assert.match(html, /type="password"/);
-  assert.match(html, /background: #000/);
-  assert.match(html, /color: #d4af37/);
   assert.deepEqual(b.setCookies, [], 'saveUninitialized: false');
+  // Task 05: the dark/gold look moved from inline CSS to the shared admin.css.
+  const css = html.match(/<link rel="stylesheet" href="(\/assets\/admin\.css\?v=[0-9a-f]+)">/);
+  assert.ok(css, 'admin.css linked');
+  const sheet = await (await b.get(css[1])).text();
+  assert.match(sheet, /--bg: #0b0b0c/);
+  assert.match(sheet, /--gold: #d4af37/);
   const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM sessions');
   assert.equal(Number(n), 0);
 });
