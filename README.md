@@ -196,4 +196,6 @@ npm run admin:list                           # username, created_at, last_login_
 
 - Application Root `/httpdocs`, Document Root `/httpdocs/public`, Application Startup File `app.js`, Application Mode `production`
 - หลังอัป `package.json` ใหม่ กด **NPM install** แล้วรัน `npm run migrate` ในแท็บ **Run Node.js commands** จากนั้นกด **Restart App**
+- ห้ามตั้ง env `DEBUG` บน production (express-mysql-session จะพิมพ์ error ทั้งก้อน รวม SQL ที่อาจมีข้อมูลลับ ลง log)
+- ถ้าแอปเจอ error ที่ไม่มีใครจัดการ จะ log หนึ่งบรรทัด `[fatal] …` (ไม่มี SQL) แล้วปิดตัวเอง Passenger จะเปิดใหม่ให้ ถ้าเห็นบรรทัดนี้ใน Logs ของโดเมนให้แจ้งผู้พัฒนา
 - ขั้นตอน deploy เต็มอยู่ใน `.claude/skills/deploy-plesk/SKILL.md`

@@ -7,6 +7,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { APP_JS, runNode } from './helpers.js';
 
 // FAKE_PASSENGER_MODE (env): unset = start normally; 'error-before-listen' = emit
@@ -167,3 +171,49 @@ test('server allows long uploads: requestTimeout 30 min, headersTimeout stays sh
     await proc.kill?.();
   }
 });
+
+// Pre-deploy: process-level handlers -----------------------------------------
+
+// Test-only preload (a file in a temp dir, so stack frames show only its path):
+// once app.js is running, fail the way a forgotten await on a mysql2 query would —
+// the error carries the interpolated SQL, here with a bcrypt hash.
+async function crashPreload(dir, how) {
+  const file = path.join(dir, `crash-${how}.mjs`);
+  await writeFile(file, `
+setTimeout(() => {
+  const err = Object.assign(new Error('Unknown column in field list'), {
+    code: 'ER_BAD_FIELD_ERROR',
+    sql: "UPDATE admin_users SET password_hash = '$2b$12$${'h'.repeat(53)}' WHERE id = 1",
+    sqlMessage: 'Unknown column',
+  });
+  ${how === 'reject' ? 'Promise.reject(err);' : 'throw err;'}
+}, 300);
+`);
+  return `--import=${pathToFileURL(file).href}`;
+}
+
+for (const [how, kind] of [['reject', 'unhandled rejection'], ['throw', 'uncaught exception']]) {
+  for (const nodeEnv of ['production', 'development']) {
+    test(`${kind} (${nodeEnv}): one sanitised [fatal] line, no hash / SQL, exit 1`, async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), 'loxley-crash-'));
+      try {
+        const result = await runNode(APP_JS, {
+          env: passengerEnv({ PORT: '0', NODE_ENV: nodeEnv }),
+          execArgv: [await crashPreload(dir, how)],
+        });
+        assert.equal(result.code, 1, result.stderr);
+        assert.match(result.stdout, /listening on port/, 'the app had started');
+        assert.ok(
+          result.stderr.includes(`[fatal] ${kind}: Error [ER_BAD_FIELD_ERROR]: Unknown column in field list`),
+          result.stderr,
+        );
+        assert.ok(!result.stderr.includes('$2b$') && !result.stdout.includes('$2b$'), 'no hash');
+        assert.doesNotMatch(result.stderr, /UPDATE admin_users|sqlMessage|\bsql\b/, 'no SQL');
+        if (nodeEnv === 'production') assert.doesNotMatch(result.stderr, /\n\s+at /, 'no stack in production');
+        else assert.match(result.stderr, /\n\s+at /, 'stack frames in development');
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  }
+}

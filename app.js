@@ -8,6 +8,7 @@ import http from 'node:http';
 import { loadConfig, ConfigError } from './src/config.js';
 import { createPool } from './src/db.js';
 import { createApp } from './src/app.js';
+import { describeError } from './src/log-error.js';
 
 // Under Phusion Passenger (Plesk) listen() is taken over by Passenger: the port is
 // ignored, the return value may not be the server, and address() is not a TCP
@@ -22,6 +23,16 @@ try {
   console.error(`[config] ${err.message}`);
   process.exit(1);
 }
+
+// Last line of defence: anything nobody caught is logged as ONE sanitised line
+// (never the raw error: mysql2 errors carry the SQL, possibly with a password
+// hash) and the process exits, so Passenger starts a fresh one.
+function fatal(kind, err) {
+  console.error(`[fatal] ${kind}: ${describeError(err, { withStack: config.showErrorDetails })}`);
+  process.exit(1);
+}
+process.on('unhandledRejection', (reason) => fatal('unhandled rejection', reason));
+process.on('uncaughtException', (err) => fatal('uncaught exception', err));
 
 const pool = createPool(config.db);
 
