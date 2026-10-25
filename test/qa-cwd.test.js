@@ -23,7 +23,7 @@ async function fakeEnv() {
     DB_NAME: 'loxley_qa_unreachable',
     DB_USERNAME: 'nobody',
     DB_PASSWORD: 'qa-sentinel-password',
-    STORAGE_DIR: '../qr-storage',
+    STORAGE_DIR: '../qr-storage', SESSION_SECRET: 'test-session-secret-0123456789abcdef',
   };
 }
 

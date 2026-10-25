@@ -36,7 +36,7 @@ before(async () => {
 
   const config = loadConfig({
     NODE_ENV: 'production', PORT: '0', DB_HOST: '127.0.0.1', DB_NAME: 'unused_test',
-    DB_USERNAME: 'x', DB_PASSWORD: 'x', STORAGE_DIR: storage,
+    DB_USERNAME: 'x', DB_PASSWORD: 'x', STORAGE_DIR: storage, SESSION_SECRET: 'test-session-secret-0123456789abcdef',
   });
   srv = await startServer(createApp({ config, pool: fakePool([]) }));
   port = new URL(srv.url).port;

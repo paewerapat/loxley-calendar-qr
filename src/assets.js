@@ -10,11 +10,18 @@ export function contentHash(content) {
   return createHash('sha256').update(content).digest('hex').slice(0, 10);
 }
 
-// Read once at createApp time (files only change with a deploy + restart).
-export function playerAssetUrls(publicDir) {
+// Read once at createApp time (files only change with a deploy + restart). A missing
+// file must not stop the app (the QR pages and back office still work): log it
+// without the full path and fall back to the plain URL.
+export function playerAssetUrls(publicDir, { log = console.error } = {}) {
   const url = (name) => {
-    const content = readFileSync(path.join(publicDir, 'assets', name));
-    return `/assets/${name}?v=${contentHash(content)}`;
+    try {
+      const content = readFileSync(path.join(publicDir, 'assets', name));
+      return `/assets/${name}?v=${contentHash(content)}`;
+    } catch (err) {
+      log(`[assets] missing assets/${name} (${err.code ?? 'error'}); serving it without ?v=`);
+      return `/assets/${name}`;
+    }
   };
   return { css: url('player.css'), js: url('player.js') };
 }

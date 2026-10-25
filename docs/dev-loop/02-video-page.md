@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done   # committed 2c995ad (2026-10-25) ยังไม่ deploy
 base: dc90db96f274eac1ecf2daa77bec6f73f55fc088
 ---
 # 02 หน้าดูวีดีโอ `/v/<slug>` + `/media/*` + คำสั่งตั้งไฟล์วีดีโอ

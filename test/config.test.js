@@ -19,7 +19,7 @@ function baseEnv(overrides = {}) {
     DB_NAME: 'loxley_unit',
     DB_USERNAME: 'someone',
     DB_PASSWORD: SECRET,
-    STORAGE_DIR: '../qr-storage',
+    STORAGE_DIR: '../qr-storage', SESSION_SECRET: 'test-session-secret-0123456789abcdef',
     ...overrides,
   };
 }
@@ -198,6 +198,7 @@ test('node app.js with NODE_ENV=production and STORAGE_DIR inside the app root r
 
 test('symlinks: STORAGE_DIR pointing (via a symlink) into public/ or at the app root is refused', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'loxley-links-'));
+  let outsideReal;
   try {
     const toPublic = path.join(dir, 'to-public');
     const toRoot = path.join(dir, 'to-root');
@@ -222,12 +223,80 @@ test('symlinks: STORAGE_DIR pointing (via a symlink) into public/ or at the app 
       /STORAGE_DIR must be outside the app root when NODE_ENV=production/,
     );
     // A real folder outside the app root (through a symlink) is accepted in production.
-    const outsideReal = await mkdtemp(path.join(os.tmpdir(), 'loxley-real-'));
+    outsideReal = await mkdtemp(path.join(os.tmpdir(), 'loxley-real-'));
     const toOutside = path.join(dir, 'to-outside');
     await symlink(outsideReal, toOutside);
     assert.doesNotThrow(() => loadConfig(baseEnv({ NODE_ENV: 'production', STORAGE_DIR: toOutside })));
-    await rm(outsideReal, { recursive: true, force: true });
   } finally {
+    // Always clean up, even when an assertion above fails.
     await rm(dir, { recursive: true, force: true });
+    if (outsideReal) await rm(outsideReal, { recursive: true, force: true });
   }
+});
+
+// Task 03 AC3 ---------------------------------------------------------------
+
+test('SESSION_SECRET is required for the app and must be ≥ 32 characters (value never printed)', () => {
+  assert.throws(() => loadConfig(baseEnv({ SESSION_SECRET: undefined })), /Missing required environment variable\(s\): SESSION_SECRET/);
+  const short = 'short-secret-31-characters-xxxx';
+  assert.equal(short.length, 31);
+  assert.throws(() => loadConfig(baseEnv({ SESSION_SECRET: short })), (err) => {
+    assert.ok(err instanceof ConfigError);
+    assert.match(err.message, /SESSION_SECRET must be at least 32 characters/);
+    assert.ok(!err.message.includes(short));
+    return true;
+  });
+  const ok = 'x'.repeat(32);
+  assert.equal(loadConfig(baseEnv({ SESSION_SECRET: `${ok}\r` })).session.secret, ok);
+});
+
+test('COOKIE_SECURE: true/false, defaults to true unless NODE_ENV=development', () => {
+  const secure = (env) => loadConfig(baseEnv(env)).session.cookieSecure;
+  assert.equal(secure({ NODE_ENV: 'production', COOKIE_SECURE: undefined }), true);
+  assert.equal(secure({ NODE_ENV: 'test', COOKIE_SECURE: undefined }), true);
+  assert.equal(secure({ NODE_ENV: undefined, COOKIE_SECURE: undefined }), true, 'fail safe when NODE_ENV is missing');
+  assert.equal(secure({ NODE_ENV: 'development', COOKIE_SECURE: undefined }), false);
+  assert.equal(secure({ NODE_ENV: 'development', COOKIE_SECURE: 'true' }), true);
+  assert.equal(secure({ NODE_ENV: 'production', COOKIE_SECURE: 'false' }), false);
+  assert.equal(secure({ NODE_ENV: 'test', COOKIE_SECURE: 'TRUE\r' }), true);
+  assert.throws(() => loadConfig(baseEnv({ COOKIE_SECURE: 'yes-please' })), (err) => {
+    assert.match(err.message, /COOKIE_SECURE must be true or false/);
+    assert.ok(!err.message.includes('yes-please'));
+    return true;
+  });
+});
+
+test('PUBLIC_ORIGIN: optional, normalised to scheme://host[:port], anything else is refused (value not printed)', () => {
+  const origin = (v) => loadConfig(baseEnv({ PUBLIC_ORIGIN: v })).publicOrigin;
+  assert.equal(origin(undefined), null);
+  assert.equal(origin('https://wjasmin.site'), 'https://wjasmin.site');
+  assert.equal(origin('https://wjasmin.site/\r'), 'https://wjasmin.site');
+  assert.equal(origin('HTTPS://WJASMIN.SITE'), 'https://wjasmin.site');
+  assert.equal(origin('https://wjasmin.site:443'), 'https://wjasmin.site');
+  assert.equal(origin('http://localhost:3000'), 'http://localhost:3000');
+  for (const bad of ['wjasmin.site', 'https://wjasmin.site/admin', 'ftp://wjasmin.site', 'https://u:p@wjasmin.site',
+    'https://wjasmin.site/?x=1', 'https://wjasmin.site#top', 'not a url at all']) {
+    assert.throws(() => loadConfig(baseEnv({ PUBLIC_ORIGIN: bad })), (err) => {
+      assert.ok(err instanceof ConfigError, bad);
+      assert.match(err.message, /PUBLIC_ORIGIN must be an origin like https:\/\/example\.com/);
+      assert.ok(!err.message.includes(bad), 'value not printed');
+      return true;
+    });
+  }
+});
+
+test('CLI scopes do not need SESSION_SECRET: db (migrate, admin:*) and storage (video:set)', () => {
+  const env = baseEnv({ SESSION_SECRET: undefined, PORT: undefined, COOKIE_SECURE: 'not-checked' });
+  assert.equal(loadConfig(env, { scope: 'db' }).session, undefined);
+  const storage = loadConfig(env, { scope: 'storage' });
+  assert.equal(storage.session, undefined);
+  assert.equal(storage.storageDir, path.resolve(APP_ROOT, '..', 'qr-storage'));
+});
+
+test('node app.js without SESSION_SECRET refuses to start and names it', async () => {
+  const env = { PATH: process.env.PATH, ...baseEnv() };
+  delete env.SESSION_SECRET;
+  const result = await runNode(APP_JS, { env });
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /\[config\] Missing required environment variable\(s\): SESSION_SECRET/);
 });

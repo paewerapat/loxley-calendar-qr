@@ -5,6 +5,7 @@
 import express from 'express';
 import { notFoundPage, errorPage } from './pages.js';
 import { mountVideoRoutes } from './video-routes.js';
+import { mountAdminRoutes } from './admin-routes.js';
 
 /**
  * @param {object} deps
@@ -12,8 +13,9 @@ import { mountVideoRoutes } from './video-routes.js';
  * @param {import('mysql2/promise').Pool} deps.pool
  * @param {(app: import('express').Express) => void} [deps.extraRoutes]
  *   mounted after the built-in routes and before the 404/500 handlers (test seam)
+ * @param {object} [deps.authLimits]  overrides for DEFAULT_AUTH_LIMITS (tests)
  */
-export function createApp({ config, pool, extraRoutes } = {}) {
+export function createApp({ config, pool, extraRoutes, authLimits } = {}) {
   const app = express();
 
   // nginx on Plesk terminates https and forwards plain http to Passenger.
@@ -34,6 +36,7 @@ export function createApp({ config, pool, extraRoutes } = {}) {
   });
 
   mountVideoRoutes(app, { config, pool });
+  mountAdminRoutes(app, { config, pool, limits: authLimits });
 
   // Only public/ is web-accessible. Dotfiles are never served.
   // redirect: false — never answer a directory (e.g. /assets, raw /v/%2e%2e) with a

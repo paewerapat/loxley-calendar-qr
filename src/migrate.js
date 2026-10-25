@@ -7,9 +7,8 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import mysql from 'mysql2/promise';
 import { APP_ROOT } from './config.js';
-import { connectionOptions } from './db.js';
+import { createConnection } from './db.js';
 
 export const MIGRATIONS_DIR = path.join(APP_ROOT, 'migrations');
 
@@ -40,7 +39,7 @@ export async function listMigrationFiles(dir = MIGRATIONS_DIR) {
  */
 export async function runMigrations(db, { dir = MIGRATIONS_DIR, log = () => {} } = {}) {
   const files = await listMigrationFiles(dir);
-  const conn = await mysql.createConnection({ ...connectionOptions(db), multipleStatements: true });
+  const conn = await createConnection(db, { multipleStatements: true }); // UTC session
   let locked = false;
   try {
     // Lock name is per database: the MariaDB server is shared with other customers.

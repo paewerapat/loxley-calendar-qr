@@ -25,6 +25,55 @@ export async function acquireDbSuiteLock(conn) {
   if (Number(row.locked) !== 1) throw new Error('Could not acquire the test DB lock');
 }
 
+// Every table any migration creates; DB tests start from an empty database.
+const ALL_TABLES = ['videos', 'schema_migrations', 'admin_users', 'login_throttle', 'sessions'];
+export async function resetTestDatabase(conn) {
+  const [[{ db }]] = await conn.query('SELECT DATABASE() AS db');
+  assertTestDatabase(db);
+  await conn.query(`DROP TABLE IF EXISTS ${ALL_TABLES.join(', ')}`);
+}
+
+// Minimal browser for back-office tests: keeps the lx.sid cookie, sends Origin on
+// unsafe methods (like a real browser form post) and can pretend to come from a
+// given client IP through X-Forwarded-For (the app trusts one proxy hop).
+export class Browser {
+  constructor(baseUrl, { ip } = {}) {
+    this.base = baseUrl;
+    this.ip = ip;
+    this.cookie = null;
+    this.setCookies = [];
+  }
+
+  async request(p, { method = 'GET', form, headers = {}, origin } = {}) {
+    const h = { ...headers };
+    if (this.cookie) h.cookie = this.cookie;
+    if (this.ip) h['x-forwarded-for'] = this.ip;
+    const unsafe = !['GET', 'HEAD'].includes(method);
+    if (origin !== undefined) {
+      if (origin !== null) h.origin = origin;
+    } else if (unsafe) {
+      h.origin = this.base;
+    }
+    let body;
+    if (form) {
+      body = new URLSearchParams(form).toString();
+      h['content-type'] = 'application/x-www-form-urlencoded';
+    }
+    const res = await fetch(this.base + p, { method, headers: h, body, redirect: 'manual' });
+    this.setCookies = res.headers.getSetCookie();
+    for (const c of this.setCookies) {
+      if (!c.startsWith('lx.sid=')) continue;
+      const pair = c.split(';')[0];
+      this.cookie = pair === 'lx.sid=' || /expires=Thu, 01 Jan 1970/i.test(c) ? null : pair;
+    }
+    return res;
+  }
+
+  get(p, opts) { return this.request(p, opts); }
+  post(p, form, opts = {}) { return this.request(p, { ...opts, method: 'POST', form }); }
+  login(username, password, opts) { return this.post('/admin/login', { username, password }, opts); }
+}
+
 // Temp STORAGE_DIR for tests (never inside the repo, never committed).
 export async function makeTempStorage() {
   return mkdtemp(path.join(os.tmpdir(), 'loxley-storage-'));

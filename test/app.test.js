@@ -19,7 +19,7 @@ function makeConfig(nodeEnv) {
     DB_NAME: 'loxley_unreachable_test',
     DB_USERNAME: 'nobody',
     DB_PASSWORD: 'not-a-real-password',
-    STORAGE_DIR: '../qr-storage',
+    STORAGE_DIR: '../qr-storage', SESSION_SECRET: 'test-session-secret-0123456789abcdef',
   });
 }
 

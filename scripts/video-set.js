@@ -9,7 +9,7 @@ import { setVideo, VideoSetError } from '../src/video-set.js';
 const [slug, key] = process.argv.slice(2);
 let pool;
 try {
-  const config = loadConfig(process.env, { requirePort: false });
+  const config = loadConfig(process.env, { scope: 'storage' }); // no SESSION_SECRET/PORT needed
   pool = createPool(config.db);
   const result = await setVideo({ pool, storageDir: config.storageDir, slug, key });
   console.log(`[video:set] ${result.slug} → ${result.key} (${result.size} bytes)`);

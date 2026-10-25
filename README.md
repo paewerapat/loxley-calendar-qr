@@ -15,6 +15,8 @@ Stack: Node.js 24 (ES modules) + Express + MariaDB (`mysql2`) ไฟล์วี
 | `src/video-routes.js` | หน้า `/v/<slug>` (QR ชี้มาที่นี่) และไฟล์วีดีโอ `/media/videos/<slug>/<epoch>.mp4` (รองรับ Range) |
 | `scripts/migrate.js` | `npm run migrate` |
 | `scripts/video-set.js` | `npm run video:set` ผูกไฟล์วีดีโอใน `STORAGE_DIR` กับชุด |
+| `src/admin-routes.js` | หลังบ้าน `/admin*`, `/api/admin/*`: login, session (เก็บใน DB), กันเดารหัส, ตรวจ Origin, เปลี่ยนรหัสผ่าน |
+| `scripts/admin.js` | `npm run admin:create` / `admin:reset-password` / `admin:list` |
 | `public/` | ไฟล์ static (Plesk Document Root) ห้ามวางไฟล์อื่นในนี้ `public/assets/player.*` คือ CSS/JS ของหน้าดูวีดีโอ |
 
 ## ตั้ง DB ในเครื่อง (MySQL 8.4 / MariaDB)
@@ -70,6 +72,66 @@ npm run video:set:dev -- <slug> videos/<slug>/<epoch>.mp4  # ในเครื�
 
 ตรวจสถานะ: `GET /healthz` → `200 {"ok":true,"db":true}` หรือ `503 {"ok":false,"db":false}` ถ้าต่อ DB ไม่ได้
 
+## หลังบ้าน: ผู้ใช้และรหัสผ่าน
+
+เข้าที่ `https://wjasmin.site/admin` (ล็อกอินด้วย username + รหัสผ่าน ไม่มีหน้าสมัครสมาชิก) ไม่ได้ใช้งาน 8 ชั่วโมงจะหลุดจากระบบ
+
+การกันเดารหัส (ทั้งหน้า login และรหัสเดิมในหน้าเปลี่ยนรหัส):
+
+- ผิด 5 ครั้งใน 15 นาที ต่อ IP + username → ล็อก 15 นาที (จองสิทธิ์ใน DB ก่อนตรวจรหัส ส่งพร้อมกันหลาย request ก็ตรวจได้ไม่เกิน 5 รหัส)
+- ผิดรวม 100 ครั้งใน 15 นาที ต่อ username ไม่ว่าจาก IP ไหน → ล็อก username นั้น (กันการปลอม IP; ปรับได้ที่ `usernameFailures` ใน `DEFAULT_AUTH_LIMITS`) ผู้โจมตีต้องใช้ราว 20 IP ถึงจะล็อกลูกค้าได้ และการเดารหัสยาว ≥ 10 ตัวใน 100 ครั้งเป็นไปไม่ได้จริง
+- ต่อ process: ส่งฟอร์มรหัสผ่านได้ 10 ครั้ง/นาที/IP และตรวจรหัส (bcrypt) พร้อมกันได้ 2 งาน เกินจากนี้ได้ข้อความ "มีการเข้าสู่ระบบถี่เกินไป กรุณารอสักครู่แล้วลองใหม่" หน้า QR สาธารณะจึงไม่ช้าตามเมื่อมีคนยิง login รัว ๆ
+- รหัสผ่านยาวได้ไม่เกิน 72 ไบต์ (ข้อจำกัดของ bcrypt ประมาณ 24 ตัวอักษรไทย)
+
+คำสั่งจัดการผู้ใช้ ใช้แค่ `DB_*` บน Plesk รันที่ Node.js → **Run Node.js commands** (ในเครื่องใช้ตัว `:dev` เช่น `npm run admin:create:dev -- <username>`)
+
+```bash
+npm run admin:create -- <username>           # สร้างผู้ใช้ พิมพ์รหัสผ่านสุ่ม (20 ตัว) ออกมาครั้งเดียว
+npm run admin:reset-password -- <username>   # สุ่มรหัสใหม่ พิมพ์ครั้งเดียว session เดิมของผู้ใช้นั้นหลุดหมด และล้างการล็อก
+npm run admin:list                           # username, created_at, last_login_at (เวลา UTC)
+```
+
+- username: `a-z 0-9 . _ -` ยาว 3–32 ตัว (พิมพ์ใหญ่จะถูกแปลงเป็นตัวเล็ก)
+- **ห้ามใส่รหัสผ่านใน command** (คำสั่งไม่รับ และ panel เก็บประวัติคำสั่งไว้) รหัสผ่านสุ่มด้วย `crypto` แล้วแสดงในผลลัพธ์ครั้งเดียว คัดลอกไปเก็บทันที
+- เก็บรหัสเป็น hash `bcryptjs` cost 12 ไม่มีการ log รหัสผ่านหรือ hash
+
+**ตอน deploy ครั้งแรก:** หลัง `npm run migrate` ให้รัน `npm run admin:create -- <username ของลูกค้า>` และ `npm run admin:create -- <username ของเรา>` ส่งรหัสของลูกค้าให้ลูกค้าทางช่องทางส่วนตัว แล้วแนะนำให้เปลี่ยนรหัสเองที่ `/admin/password`
+
+**ลูกค้าลืมรหัสผ่าน (หรือถูกล็อก):** รัน `npm run admin:reset-password -- <username>` แล้วส่งรหัสใหม่ให้ลูกค้า ลูกค้าล็อกอินแล้วเปลี่ยนเป็นรหัสของตัวเองที่ `/admin/password` (รหัสใหม่ยาวอย่างน้อย 10 ตัว)
+
+ทุกครั้งที่มีการล็อกอินจะมี log ใน Logs ของโดเมน เช่น `[auth] login ok ip=1.2.3.4 proto=https secure=true` หรือ `[auth] login failed ip=… proto=… secure=…` (ไม่มีรหัสผ่านใน log)
+
+### แก้ปัญหาหลังบ้าน
+
+#### กดเข้าสู่ระบบแล้วได้ 403 / ล็อกอินแล้วเด้งกลับหน้า login (cookie ไม่ติด)
+
+- ตรวจว่าตั้ง `PUBLIC_ORIGIN=https://wjasmin.site` ใน Plesk แล้ว (ตรงกับ URL ที่เปิดจริง ทั้ง scheme และ host ถ้าเปิดผ่าน `www.` ต้องใช้ค่านั้นหรือ redirect `www` ไปโดเมนหลัก)
+- ดู log `[auth] login … proto=… secure=…`: ถ้า `proto=http secure=false` แปลว่า nginx ไม่ได้ส่ง `X-Forwarded-Proto: https` มา ถ้าตั้ง `PUBLIC_ORIGIN` เป็น https แล้ว แอปจะถือว่าเป็น https ให้เองเมื่อ header นี้ไม่มี (ถ้า nginx ส่ง `http` มาตรง ๆ แอปจะเชื่อตาม ต้องแก้ที่ nginx)
+- ถ้าเปิดผ่าน `http://` โดยตรง cookie แบบ Secure จะไม่ถูกเก็บ ต้องเปิดผ่าน https เท่านั้น (Plesk redirect http → https ไว้แล้ว)
+
+#### `ip=` เป็น 127.0.0.1 ทุกครั้ง หรือเป็นค่าที่ผู้ใช้ปลอมได้
+
+- แอปเชื่อ proxy 1 ชั้น (`trust proxy` = 1) คือใช้ IP ตัวสุดท้ายใน `X-Forwarded-For` ที่ nginx เติมให้
+- ถ้าเป็น 127.0.0.1 ทุกครั้ง: nginx ไม่ได้ส่ง `X-Forwarded-For` การล็อกต่อ IP จะนับรวมทุกคนเป็น IP เดียว (ลูกค้าอาจโดนล็อกเพราะคนอื่น) ต้องแก้การตั้งค่า proxy ก่อนใช้งาน
+- ถ้าเห็น IP แปลก ๆ ที่เปลี่ยนไปเรื่อย ๆ จากคนเดียวกัน: มี proxy มากกว่า 1 ชั้นหรือ header ถูกปลอม ตัวจำกัดต่อ username (100 ครั้ง/15 นาที) ยังกันการเดารหัสไว้ได้ แต่ควรตรวจการตั้งค่า proxy
+
+#### ลูกค้าโดนล็อกซ้ำ ๆ ("ลองผิดหลายครั้งเกินไป")
+
+- รัน `npm run admin:reset-password -- <username>` (ล้างการล็อกของ username นั้นด้วย) แล้วส่งรหัสใหม่ให้ลูกค้า
+- ดู log `[auth] login failed ip=…` ใน Logs ของโดเมนว่ามาจาก IP ไหน ถ้าไม่ใช่ IP ของลูกค้า แปลว่ามีคนพยายามเดารหัส username นี้อยู่
+
+### ตรวจหลัง deploy (หลังบ้าน)
+
+1. **IP ปลอมผ่าน `X-Forwarded-For` ต้องไม่ถูกเชื่อ:**
+   ```bash
+   curl -X POST -H 'Origin: https://wjasmin.site' -H 'X-Forwarded-For: 203.0.113.9' \
+     -d 'username=x&password=y' https://wjasmin.site/admin/login
+   ```
+   แล้วดู Logs ของโดเมน: บรรทัด `[auth] login failed ip=…` ต้อง**ไม่ใช่** `ip=203.0.113.9` (ต้องเป็น IP จริงของเครื่องที่รัน curl) และต้องเห็น `proto=https secure=true`
+   ถ้าเห็น `ip=203.0.113.9` แปลว่ามี proxy มากกว่า 1 ชั้นหรือ nginx ส่ง header ของผู้ใช้ต่อมาตรง ๆ ต้องแก้ก่อนเปิดใช้งาน
+2. **www ต้อง redirect ไปโดเมนหลักก่อนแสดงฟอร์ม:** เปิด `https://www.wjasmin.site/admin/login` ต้องถูก redirect ไป `https://wjasmin.site/admin/login` (ตรวจด้วย `curl -sI https://www.wjasmin.site/admin/login` ต้องได้ 301/302 และ `Location: https://wjasmin.site/...`) ไม่งั้นฟอร์มที่ส่งจาก www จะได้ 403 เพราะไม่ตรงกับ `PUBLIC_ORIGIN`
+3. ล็อกอินด้วยผู้ใช้จริงแล้วออกจากระบบได้ และ log แสดง `[auth] login ok ip=<IP จริง> proto=https secure=true`
+
 ## ตัวแปร env
 
 ตั้งใน Plesk → Websites & Domains → wjasmin.site → Node.js → **Custom environment variables** (ใส่ชื่อตามนี้ ค่าจริงห้ามเขียนลง repo)
@@ -83,6 +145,9 @@ npm run video:set:dev -- <slug> videos/<slug>/<epoch>.mp4  # ในเครื�
 | `DB_PASSWORD` | ใช่ | |
 | `STORAGE_DIR` | ใช่ | production = `../qr-storage` (path สัมพัทธ์คิดจากโฟลเดอร์ของ `app.js` คือ `/httpdocs`) ห้ามอยู่ใน `public/` หรือเท่ากับ app root และเมื่อ `NODE_ENV=production` ต้องอยู่นอก app root (deploy ที่ mirror แบบ `--delete` ทับ `/httpdocs` จะลบวีดีโอได้) ตรวจตาม path จริงหลังตาม symlink ถ้าผิดแอปจะไม่ยอมสตาร์ต ในเครื่อง (dev/test) ใช้ `./storage` ได้ |
 | `NODE_ENV` | ไม่ | Plesk ตั้งให้จาก Application Mode = `production` แสดง stack trace เฉพาะเมื่อตั้งเป็น `development` ตรง ๆ (ไม่ตั้ง = ไม่แสดง) |
+| `SESSION_SECRET` | ใช่ (เฉพาะแอป) | ใช้เซ็น cookie ของ session ยาวอย่างน้อย 32 ตัวอักษร สร้างด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` (ได้ 64 ตัว hex) ใช้ค่าแยกกันระหว่างเครื่อง dev กับ production ถ้าเปลี่ยนค่า ทุกคนจะหลุดจากระบบ คำสั่ง CLI (`migrate`, `video:set`, `admin:*`) ไม่ต้องใช้ |
+| `COOKIE_SECURE` | ไม่ | `true` / `false` ถ้าไม่ตั้ง: `true` เสมอ ยกเว้น `NODE_ENV=development` ในเครื่องที่เปิดผ่าน `http://localhost` ต้องเป็น `false` ไม่งั้นเบราว์เซอร์จะไม่เก็บ cookie (`.env.dev` / `.env.test` ตั้งไว้แล้ว) |
+| `PUBLIC_ORIGIN` | แนะนำบน Plesk | `https://wjasmin.site` ถ้าตั้ง: การตรวจ CSRF เทียบ `Origin`/`Referer` กับค่านี้ตรง ๆ (scheme + host + port) แทนการเชื่อ header จาก proxy และถ้าเป็น https แอปจะออก cookie แบบ Secure ได้แม้ nginx ไม่ส่ง `X-Forwarded-Proto` ในเครื่องไม่ต้องตั้ง |
 | `PORT` | ไม่ต้องตั้งบน Plesk | บน Plesk Passenger จัดการการ listen เอง แอปจะไม่ใช้ `PORT` ส่วนในเครื่องมาจาก `.env.dev` (รัน `node app.js` นอก Passenger ต้องมี `PORT`) |
 
 ค่าที่อ่านจาก env จะตัดช่องว่างและ `\r` (CRLF) ออกให้

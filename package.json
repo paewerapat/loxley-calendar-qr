@@ -15,10 +15,24 @@
     "migrate": "node scripts/migrate.js",
     "migrate:dev": "node --env-file=.env.dev scripts/migrate.js",
     "video:set": "node scripts/video-set.js",
-    "video:set:dev": "node --env-file=.env.dev scripts/video-set.js"
+    "video:set:dev": "node --env-file=.env.dev scripts/video-set.js",
+    "admin:create": "node scripts/admin.js create",
+    "admin:create:dev": "node --env-file=.env.dev scripts/admin.js create",
+    "admin:reset-password": "node scripts/admin.js reset-password",
+    "admin:reset-password:dev": "node --env-file=.env.dev scripts/admin.js reset-password",
+    "admin:list": "node scripts/admin.js list",
+    "admin:list:dev": "node --env-file=.env.dev scripts/admin.js list"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "express": "^5.3.0",
+    "express-mysql-session": "^3.0.3",
+    "express-session": "^1.19.0",
     "mysql2": "^3.24.6"
+  },
+  "overrides": {
+    "express-mysql-session": {
+      "mysql2": "$mysql2"
+    }
   }
 }

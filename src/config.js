@@ -13,7 +13,9 @@ import { fileURLToPath } from 'node:url';
 export const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const DB_VARS = ['DB_HOST', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD'];
-const APP_VARS = ['STORAGE_DIR'];
+const STORAGE_VARS = ['STORAGE_DIR'];
+const SESSION_VARS = ['SESSION_SECRET'];
+const MIN_SESSION_SECRET_LENGTH = 32;
 
 export class ConfigError extends Error {
   constructor(message) {
@@ -37,17 +39,21 @@ function parsePort(name, raw) {
 
 /**
  * @param {Record<string, string|undefined>} env
- * @param {{ scope?: 'app'|'db', requirePort?: boolean }} options
- *   scope 'db' only needs the database variables (used by `npm run migrate`, which on
- *   Plesk runs from "Run Node.js commands" where PORT is not set).
+ * @param {{ scope?: 'app'|'storage'|'db', requirePort?: boolean }} options
+ *   scope 'db'      DB_* only: `npm run migrate`, `npm run admin:*` (on Plesk these run
+ *                   from "Run Node.js commands", where PORT is not set)
+ *   scope 'storage' DB_* + STORAGE_DIR: `npm run video:set`
+ *   scope 'app'     everything the web app needs (adds SESSION_SECRET, COOKIE_SECURE, PORT)
  *   requirePort=false lets PORT be absent (Passenger hooks listen() itself).
  */
 export function loadConfig(env = process.env, { scope = 'app', requirePort = true } = {}) {
   const get = (name) => clean(env[name]);
+  const withStorage = scope === 'app' || scope === 'storage';
 
   const required = [...DB_VARS];
+  if (withStorage) required.push(...STORAGE_VARS);
   if (scope === 'app') {
-    required.push(...APP_VARS);
+    required.push(...SESSION_VARS);
     if (requirePort) required.push('PORT');
   }
 
@@ -72,14 +78,56 @@ export function loadConfig(env = process.env, { scope = 'app', requirePort = tru
     },
   };
 
-  if (scope === 'app') {
-    config.port = get('PORT') === '' ? null : parsePort('PORT', get('PORT'));
+  if (withStorage) {
     config.storageDir = path.resolve(APP_ROOT, get('STORAGE_DIR'));
     config.publicDir = path.join(APP_ROOT, 'public');
     checkStorageDir(config.storageDir, config.publicDir, nodeEnv);
   }
 
+  if (scope === 'app') {
+    config.port = get('PORT') === '' ? null : parsePort('PORT', get('PORT'));
+    const secret = get('SESSION_SECRET');
+    if (secret.length < MIN_SESSION_SECRET_LENGTH) {
+      throw new ConfigError(
+        `Environment variable SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LENGTH} characters`,
+      );
+    }
+    config.session = {
+      secret,
+      // Secure unless explicitly in development (plain http://localhost); fail safe
+      // when NODE_ENV is missing.
+      cookieSecure: parseBool('COOKIE_SECURE', get('COOKIE_SECURE'), nodeEnv !== 'development'),
+    };
+    // Optional public origin of the site, e.g. https://wjasmin.site. When set, the
+    // CSRF check compares against it instead of trusting proxy headers.
+    config.publicOrigin = parseOrigin('PUBLIC_ORIGIN', get('PUBLIC_ORIGIN'));
+  }
+
   return config;
+}
+
+function parseOrigin(name, raw) {
+  if (raw === '') return null;
+  const bad = () => new ConfigError(`Environment variable ${name} must be an origin like https://example.com`);
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw bad();
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.pathname !== '/' || url.search || url.hash
+    || url.username || url.password || raw.endsWith('?') || raw.endsWith('#')) {
+    throw bad();
+  }
+  return url.origin; // normalised: lowercase scheme/host, default port dropped
+}
+
+function parseBool(name, raw, fallback) {
+  if (raw === '') return fallback;
+  const v = raw.toLowerCase();
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  throw new ConfigError(`Environment variable ${name} must be true or false`);
 }
 
 // Messages name the variable only; the resolved path is never printed.

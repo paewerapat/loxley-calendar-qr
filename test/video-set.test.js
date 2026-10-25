@@ -12,7 +12,7 @@ import { runMigrations } from '../src/migrate.js';
 import { setVideo, VideoSetError } from '../src/video-set.js';
 import { createApp } from '../src/app.js';
 import {
-  assertTestDatabase, acquireDbSuiteLock, makeTempStorage, fakeMp4Bytes, writeStorageFile, startServer, runNode,
+  assertTestDatabase, acquireDbSuiteLock, resetTestDatabase, makeTempStorage, fakeMp4Bytes, writeStorageFile, startServer, runNode,
 } from './helpers.js';
 
 const SCRIPT = path.join(APP_ROOT, 'scripts', 'video-set.js');
@@ -32,7 +32,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
-  await conn.query('DROP TABLE IF EXISTS videos, schema_migrations');
+  await resetTestDatabase(conn);
   await runMigrations(baseConfig.db);
   if (storage) await rm(storage, { recursive: true, force: true });
   storage = await makeTempStorage();

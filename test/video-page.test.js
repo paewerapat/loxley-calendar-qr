@@ -31,7 +31,7 @@ before(async () => {
   await writeStorageFile(storage, 'videos/m03/1792832982.mp4', fakeMp4Bytes(100));
   const config = loadConfig({
     NODE_ENV: 'production', PORT: '0', DB_HOST: '127.0.0.1', DB_NAME: 'unused_test',
-    DB_USERNAME: 'x', DB_PASSWORD: 'x', STORAGE_DIR: storage,
+    DB_USERNAME: 'x', DB_PASSWORD: 'x', STORAGE_DIR: storage, SESSION_SECRET: 'test-session-secret-0123456789abcdef',
   });
   srv = await startServer(createApp({ config, pool: fakePool(ROWS) }));
 });
@@ -209,7 +209,7 @@ test('AC4: title is escaped everywhere', async () => {
 test('a database error on /v → 500 Thai page, no details', async (t) => {
   t.mock.method(console, 'error', () => {});
   const config = loadConfig({
-    NODE_ENV: 'production', PORT: '0', DB_HOST: 'h', DB_NAME: 'n_test', DB_USERNAME: 'u', DB_PASSWORD: 'p', STORAGE_DIR: storage,
+    NODE_ENV: 'production', PORT: '0', DB_HOST: 'h', DB_NAME: 'n_test', DB_USERNAME: 'u', DB_PASSWORD: 'p', STORAGE_DIR: storage, SESSION_SECRET: 'test-session-secret-0123456789abcdef',
   });
   const broken = { query: async () => { throw Object.assign(new Error('db down'), { code: 'ECONNREFUSED' }); } };
   const s = await startServer(createApp({ config, pool: broken }));
@@ -221,5 +221,40 @@ test('a database error on /v → 500 Thai page, no details', async (t) => {
     assert.doesNotMatch(html, /db down|ECONNREFUSED/);
   } finally {
     await s.close();
+  }
+});
+
+// Task 03 AC13: missing player assets must not stop the app.
+test('missing assets: logs "[assets] missing ..." without the full path and falls back to plain URLs', () => {
+  const lines = [];
+  const urls = playerAssetUrls(path.join(os.tmpdir(), 'loxley-no-such-public-dir'), { log: (l) => lines.push(l) });
+  assert.deepEqual(urls, { css: '/assets/player.css', js: '/assets/player.js' });
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^\[assets\] missing assets\/player\.css/);
+  assert.match(lines[1], /^\[assets\] missing assets\/player\.js/);
+  assert.ok(lines.every((l) => !l.includes(os.tmpdir())), 'no full path in the log');
+});
+
+test('missing assets: the app still starts and the video page uses URLs without ?v=', async (t) => {
+  const logs = [];
+  t.mock.method(console, 'error', (...a) => logs.push(a.join(' ')));
+  const emptyPublic = await mkdtemp(path.join(os.tmpdir(), 'loxley-empty-public-'));
+  try {
+    const base = loadConfig({
+      NODE_ENV: 'production', PORT: '0', DB_HOST: '127.0.0.1', DB_NAME: 'unused_test', DB_USERNAME: 'x',
+      DB_PASSWORD: 'x', STORAGE_DIR: storage, SESSION_SECRET: 'test-session-secret-0123456789abcdef',
+    });
+    const s = await startServer(createApp({ config: { ...base, publicDir: emptyPublic }, pool: fakePool(ROWS) }));
+    try {
+      const html = await (await fetch(`${s.url}/v/ecard-lee`)).text();
+      assert.match(html, /<link rel="stylesheet" href="\/assets\/player\.css">/);
+      assert.match(html, /<script src="\/assets\/player\.js" defer><\/script>/);
+    } finally {
+      await s.close();
+    }
+    assert.ok(logs.some((l) => l.startsWith('[assets] missing assets/player.js')));
+    assert.ok(logs.every((l) => !l.includes(emptyPublic)));
+  } finally {
+    await rm(emptyPublic, { recursive: true, force: true });
   }
 });

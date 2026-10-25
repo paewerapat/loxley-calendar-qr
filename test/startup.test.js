@@ -43,7 +43,7 @@ function passengerEnv(overrides = {}) {
     DB_NAME: 'loxley_passenger_unused',
     DB_USERNAME: 'nobody',
     DB_PASSWORD: 'passenger-sentinel-password',
-    STORAGE_DIR: '../qr-storage',
+    STORAGE_DIR: '../qr-storage', SESSION_SECRET: 'test-session-secret-0123456789abcdef',
     ...overrides,
   };
   for (const k of Object.keys(env)) if (env[k] === undefined) delete env[k];
