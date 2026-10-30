@@ -130,7 +130,7 @@ test('uploads stream to disk: live memory stays small and does not grow with the
   assert.equal((await b.login('mem.user', 'memory password 1')).status, 302);
   await b.get('/admin'); // warm up the admin page code path
 
-  const small = await measuredUpload(b, 'm01', 20 * MIB); // monthly limit
+  const small = await measuredUpload(b, 'm01', 20 * MIB); // a monthly-sized file
   const big = await measuredUpload(b, 'ecard-lee', 99 * MIB);
   for (const [label, run, size] of [['20 MiB', small, 20 * MIB], ['99 MiB', big, 99 * MIB]]) {
     assert.equal(run.res.status, 200, `${label}: ${run.res.text}`);

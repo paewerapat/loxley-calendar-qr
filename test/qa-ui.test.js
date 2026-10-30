@@ -323,7 +323,7 @@ function runAdminJs(initial) {
     fields['qr-check'].hidden = !hasVideo;
     const actions = { upload: el(), copy: el({ dataset: { url: `https://x/v/${slug}` } }), cancel: el() };
     return {
-      dataset: { slug, limitBytes: String(SIZE_LIMITS.monthly), limitLabel: '20 MB', hasVideo: hasVideo ? 'true' : 'false' },
+      dataset: { slug, limitBytes: String(SIZE_LIMITS.monthly), limitLabel: '40 MB', hasVideo: hasVideo ? 'true' : 'false' },
       fields, actions,
       querySelector(sel) {
         let m = /^\[data-field="([^"]+)"\]$/.exec(sel);
@@ -389,7 +389,7 @@ test('2b. admin.js: a successful upload flips the card (✓, data-has-video) and
 
   // A failed upload changes nothing.
   await js.pick(js.cards[2]);
-  js.xhrs[2].respond(413, { code: 'too_large', message: 'ไฟล์ใหญ่เกิน 20 MB' });
+  js.xhrs[2].respond(413, { code: 'too_large', message: 'ไฟล์ใหญ่เกิน 40 MB' });
   assert.equal(js.cards[2].dataset.hasVideo, 'false');
   assert.equal(js.cards[2].fields['qr-check'].hidden, true);
   assert.equal(js.summaryDone.textContent, '2');

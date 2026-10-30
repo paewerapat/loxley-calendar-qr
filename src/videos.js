@@ -10,11 +10,11 @@ export const SLUG_RE = /^[a-z0-9-]{1,40}$/;
 // file name (rule 2), e.g. videos/ecard-lee/1792832980.mp4
 export const MEDIA_KEY_RE = /^videos\/[a-z0-9-]{1,40}\/[0-9]{9,13}\.mp4$/;
 
-// Size limits per kind, in MiB (1 MiB = 1,048,576 bytes; a file shown as "20 MB"
-// by any phone or computer fits in 20 MiB). The single source for the CLI, the
+// Size limits per kind, in MiB (1 MiB = 1,048,576 bytes; a file shown as "40 MB"
+// by any phone or computer fits in 40 MiB). The single source for the CLI, the
 // upload route and the browser (sent to the page via data attributes / JSON).
 const MIB = 1024 * 1024;
-export const SIZE_LIMITS = { monthly: 20 * MIB, ecard: 100 * MIB };
+export const SIZE_LIMITS = { monthly: 40 * MIB, ecard: 100 * MIB };
 export const VIDEO_MIME = 'video/mp4';
 
 function sizeText(bytes, mega, kilo) {
@@ -28,12 +28,12 @@ function sizeText(bytes, mega, kilo) {
   return `${n} bytes`;
 }
 
-// For customers (page, API, upload messages): "20 MB", "7.3 MB" — computed in
+// For customers (page, API, upload messages): "40 MB", "7.3 MB" — computed in
 // 1024-based units, the way Windows labels sizes, so a file the customer's
-// computer shows as 20 MB always fits the 20 MiB limit.
+// computer shows as 40 MB always fits the 40 MiB limit.
 export const formatSize = (bytes) => sizeText(bytes, 'MB', 'KB');
 
-// For the operator (CLI messages): exact binary units, "20 MiB".
+// For the operator (CLI messages): exact binary units, "40 MiB".
 export const formatSizeBinary = (bytes) => sizeText(bytes, 'MiB', 'KiB');
 
 // Exact bytes, for messages where rounding would hide the difference.

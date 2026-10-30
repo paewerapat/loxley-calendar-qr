@@ -13,7 +13,7 @@ description: สร้างและดูแลระบบหน้าเว�
 - จำนวนชุด: 14 ชุด = วีดีโอรายเดือน 12 ชุด + e-card ปีใหม่ 2 ชุด: `ecard-lee` (บริษัท Lee, ส่ง QR ให้ลูกค้าแล้ว 2026-10-24) และ `ecard-loxley`
 - **QR ที่ส่งลูกค้าไปแล้ว** (ห้ามเปลี่ยน URL): `https://wjasmin.site/v/ecard-lee/` (มี `/` ต่อท้าย route `/v/:slug` ต้องรับทั้งแบบมีและไม่มี `/`) ย้ายเข้าแอปแล้ว (2026-10-25) หน้าชั่วคราวใน `public/v/` ถูกลบไปแล้ว
 - วีดีโอรายเดือน: เสียงบรรยายไทย + ซับอังกฤษฝังในไฟล์ ไม่มีหน้าเลือกภาษา
-- ขนาดไฟล์: รายเดือน ≤ 20MB, e-card ≤ 100MB
+- ขนาดไฟล์: รายเดือน ≤ 40MB (เพิ่มจาก 20MB ตามที่ผู้ใช้ขอ 2026-10-30), e-card ≤ 100MB
 - ฝากไฟล์ 1 ปีนับจากวันส่งมอบ ต่ออายุปีละ 500 บาท
 - ห้ามใช้ Netlify ฟรีกับไฟล์วีดีโอ (แบนด์วิดท์ 100GB/เดือนหมดเร็ว)
 - **Login หลังบ้าน: username + รหัสผ่าน** (ผู้ใช้เลือกแล้ว ไม่ใช้ Google) ส่วนที่พูดถึง Google OAuth / Cloudflare Access ในไฟล์นี้ใช้กับงานอื่น
@@ -167,7 +167,7 @@ Seed 14 แถวไว้ตั้งแต่แรก แม้ยังไ�
 2. **ตั้งชื่อไฟล์ใน R2 แบบมี timestamp** (`videos/<slug>/<epoch>.mp4`) ไม่เขียนทับชื่อเดิม กันปัญหา cache ค้างเป็นวีดีโอเก่า ลบไฟล์เก่าหลัง commit สำเร็จเท่านั้น
 3. **`/media/*` ต้องรองรับ HTTP Range** (ส่ง 206 + `Content-Range`, `Accept-Ranges: bytes`) ไม่งั้น iPhone/Safari เล่นวีดีโอไม่ได้หรือ seek ไม่ได้ ใช้ `env.BUCKET.get(key, { range })` และตั้ง `Cache-Control: public, max-age=31536000, immutable`
 4. **อัปโหลดตรงเข้า R2 ด้วย presigned URL** ห้ามส่งไฟล์ผ่าน Function เพราะ request body ของ Worker มีขีดจำกัด และ e-card ใหญ่ถึง 100MB ใช้ `aws4fetch` เซ็น URL กับ R2 S3 API (เก็บ Access Key/Secret เป็น secret ของ Pages) ตั้ง CORS ของ bucket ให้รับ `PUT` จาก domain ของเรา
-5. **ตรวจขนาดและชนิดไฟล์ 2 ชั้น**: ฝั่งเบราว์เซอร์ก่อนอัป และฝั่ง server ตอน commit (`HEAD` object ใน R2) monthly ≤ 20MB, ecard ≤ 100MB, `video/mp4` เท่านั้น เกินให้แจ้งข้อความภาษาไทยที่ลูกค้าเข้าใจ
+5. **ตรวจขนาดและชนิดไฟล์ 2 ชั้น**: ฝั่งเบราว์เซอร์ก่อนอัป และฝั่ง server ตอน commit (`HEAD` object ใน R2) monthly ≤ 40MB, ecard ≤ 100MB, `video/mp4` เท่านั้น เกินให้แจ้งข้อความภาษาไทยที่ลูกค้าเข้าใจ
 6. **ทุก endpoint ใต้ `/api/admin/*` ต้องตรวจ `Cf-Access-Jwt-Assertion`** กับ JWKS ของทีม (`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`) และ AUD ของ Access app อย่าเชื่อแค่ว่า Access ครอบ path ไว้แล้ว ใช้อีเมลจาก JWT บันทึกลง `updated_by`
 7. **ไม่เก็บ secret ใน repo** ใช้ `wrangler secret put` / ตั้งใน dashboard
 
@@ -212,7 +212,7 @@ ffmpeg -i input.mov -c:v libx264 -profile:v high -crf 26 -preset slow \
 ```
 
 - ต้องมี `-movflags +faststart` เสมอ วีดีโอจะเริ่มเล่นได้ก่อนโหลดครบ
-- ถ้ายังเกิน 20MB ให้เพิ่ม `-crf` ทีละ 2 แล้วเปิดดูว่าซับยังอ่านออก
+- ถ้ายังเกินขีด (รายเดือน 40MB) ให้เพิ่ม `-crf` ทีละ 2 แล้วเปิดดูว่าซับยังอ่านออก
 - อย่าบีบจนตัวหนังสือซับแตก ลูกค้าดูซับเป็นหลัก
 
 ## สร้าง QR Code

@@ -116,8 +116,8 @@ const FAILURES = [
   ['directory instead of file', 'm01', 'videos/m01/1792811111.mp4', /ไม่พบไฟล์/],
   ['not an MP4 (no ftyp)', 'm01', 'videos/m01/1792822222.mp4', /ไม่ใช่ MP4/],
   // Exact bytes for both numbers (no "20.0MB over 20.0MB").
-  ['monthly over 20MB', 'm01', 'videos/m01/1792833333.mp4',
-    /ใหญ่เกินกำหนด: 20,971,521 bytes \(ชุด monthly รับได้ไม่เกิน 20,971,520 bytes = 20 MiB\)/],
+  ['monthly over 40MB', 'm01', 'videos/m01/1792833333.mp4',
+    /ใหญ่เกินกำหนด: 41,943,041 bytes \(ชุด monthly รับได้ไม่เกิน 41,943,040 bytes = 40 MiB\)/],
   ['e-card over 100MB', 'ecard-lee', 'videos/ecard-lee/1792844444.mp4',
     /ใหญ่เกินกำหนด: 104,857,601 bytes \(ชุด ecard รับได้ไม่เกิน 104,857,600 bytes = 100 MiB\)/],
 ];
@@ -126,7 +126,7 @@ async function prepareFailureFiles() {
   await writeStorageFile(storage, 'videos/m02/1792832980.mp4', fakeMp4Bytes(100));
   await mkdir(path.join(storage, 'videos', 'm01', '1792811111.mp4'), { recursive: true });
   await writeStorageFile(storage, 'videos/m01/1792822222.mp4', Buffer.from('this is not a video at all'));
-  await writeSparseMp4('videos/m01/1792833333.mp4', 20 * MB + 1);
+  await writeSparseMp4('videos/m01/1792833333.mp4', 40 * MB + 1);
   await writeSparseMp4('videos/ecard-lee/1792844444.mp4', 100 * MB + 1);
 }
 
@@ -152,13 +152,13 @@ test('CLI: a failed check exits 1 with the reason', async () => {
   assert.equal((await row('m01')).r2_key, null);
 });
 
-test('size limits: monthly exactly 20MB and e-card 20MB+1 are accepted', async () => {
-  await writeSparseMp4('videos/m01/1792855555.mp4', 20 * MB);
-  await writeSparseMp4('videos/ecard-lee/1792866666.mp4', 20 * MB + 1);
+test('size limits: monthly exactly 40MB and e-card 40MB+1 are accepted', async () => {
+  await writeSparseMp4('videos/m01/1792855555.mp4', 40 * MB);
+  await writeSparseMp4('videos/ecard-lee/1792866666.mp4', 40 * MB + 1);
   await setVideo({ pool, storageDir: storage, slug: 'm01', key: 'videos/m01/1792855555.mp4' });
   await setVideo({ pool, storageDir: storage, slug: 'ecard-lee', key: 'videos/ecard-lee/1792866666.mp4' });
-  assert.equal(Number((await row('m01')).size_bytes), 20 * MB);
-  assert.equal(Number((await row('ecard-lee')).size_bytes), 20 * MB + 1);
+  assert.equal(Number((await row('m01')).size_bytes), 40 * MB);
+  assert.equal(Number((await row('ecard-lee')).size_bytes), 40 * MB + 1);
 });
 
 test('end to end with the real DB: video:set → /v/ecard-lee/ plays /media/<key> with Range', async () => {

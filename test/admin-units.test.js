@@ -7,20 +7,20 @@ import { qrFileNames, attachmentHeader, qrTargetUrl } from '../src/qr.js';
 import { toAdminRow, tooLargeError } from '../src/video-files.js';
 
 test('size labels: MB for customers (1024-based, like Windows), exact MiB for the CLI (AC8)', () => {
-  assert.equal(SIZE_LIMITS.monthly, 20 * 1024 * 1024);
+  assert.equal(SIZE_LIMITS.monthly, 40 * 1024 * 1024);
   assert.equal(SIZE_LIMITS.ecard, 100 * 1024 * 1024);
-  assert.equal(formatSize(SIZE_LIMITS.monthly), '20 MB');
+  assert.equal(formatSize(SIZE_LIMITS.monthly), '40 MB');
   assert.equal(formatSize(SIZE_LIMITS.ecard), '100 MB');
   assert.equal(formatSize(7654321), '7.3 MB');
   assert.equal(formatSize(2048), '2 KB');
-  assert.equal(formatSizeBinary(SIZE_LIMITS.monthly), '20 MiB');
+  assert.equal(formatSizeBinary(SIZE_LIMITS.monthly), '40 MiB');
   assert.equal(formatSizeBinary(2048), '2 KiB');
   assert.equal(formatSize(10), '10 bytes');
   assert.equal(formatSize(null), '-');
-  assert.equal(formatBytes(20971521), '20,971,521 bytes');
-  const err = tooLargeError('monthly', 20971521);
-  assert.equal(err.message, 'ไฟล์ใหญ่เกินกำหนด: 20,971,521 bytes (ชุด monthly รับได้ไม่เกิน 20,971,520 bytes = 20 MiB)');
-  assert.equal(err.userMessage, 'ไฟล์ใหญ่เกิน 20 MB (วีดีโอรายเดือนรับได้ไม่เกิน 20 MB)');
+  assert.equal(formatBytes(41943041), '41,943,041 bytes');
+  const err = tooLargeError('monthly', 41943041);
+  assert.equal(err.message, 'ไฟล์ใหญ่เกินกำหนด: 41,943,041 bytes (ชุด monthly รับได้ไม่เกิน 41,943,040 bytes = 40 MiB)');
+  assert.equal(err.userMessage, 'ไฟล์ใหญ่เกิน 40 MB (วีดีโอรายเดือนรับได้ไม่เกิน 40 MB)');
   assert.equal(err.status, 413);
 });
 

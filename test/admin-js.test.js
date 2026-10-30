@@ -96,7 +96,7 @@ async function pick(card, f) {
 test('too big for this set → Thai message with the server-sent limit, nothing sent', async () => {
   const { cards, xhrs, fetches } = setup();
   await pick(cards[0], file('a.mp4', 'video/mp4', SIZE_LIMITS.monthly + 1));
-  assert.match(cards[0].fields.message.textContent, /^ไฟล์ใหญ่เกิน 20 MB/);
+  assert.match(cards[0].fields.message.textContent, /^ไฟล์ใหญ่เกิน 40 MB/);
   assert.equal(cards[0].fields.message.className, 'msg error');
   assert.equal(xhrs.length, 0);
   assert.equal(fetches.length, 0);
@@ -159,9 +159,9 @@ test('upload: session check, POST via XHR, % progress, no double submit, card up
 
 test('server / network errors become Thai messages', async () => {
   const cases = [
-    [413, { code: 'too_large', message: 'ไฟล์ใหญ่เกิน 20 MB (วีดีโอรายเดือนรับได้ไม่เกิน 20 MB)' }, /^ไฟล์ใหญ่เกิน 20 MB \(/],
+    [413, { code: 'too_large', message: 'ไฟล์ใหญ่เกิน 40 MB (วีดีโอรายเดือนรับได้ไม่เกิน 40 MB)' }, /^ไฟล์ใหญ่เกิน 40 MB \(/],
     [415, { code: 'not_mp4', message: 'ไฟล์นี้ไม่ใช่วีดีโอ MP4 กรุณาเลือกไฟล์ .mp4' }, /ไม่ใช่วีดีโอ MP4/],
-    [413, '<html>413 Request Entity Too Large</html>', /^ไฟล์ใหญ่เกิน 20 MB/], // from nginx
+    [413, '<html>413 Request Entity Too Large</html>', /^ไฟล์ใหญ่เกิน 40 MB/], // from nginx
     [401, { error: 'unauthorized' }, /หมดเวลาล็อกอิน/],
     [500, '<html>error</html>', /ระบบขัดข้อง/],
     [507, { code: 'storage_full', message: 'พื้นที่เก็บไฟล์บนเซิร์ฟเวอร์เต็ม กรุณาติดต่อผู้ดูแลระบบ' }, /พื้นที่เก็บไฟล์/],

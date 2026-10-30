@@ -122,7 +122,7 @@ test('AC1: /admin lists the 14 sets in sort_order with status, size, links, QR a
   // and the view link reads "ดูวีดีโอ" with an icon in front.
   assert.match(m01, /<h3>มกราคม 2570<\/h3>/);
   assert.match(m01, /ยังไม่มีวีดีโอ/);
-  assert.match(m01, new RegExp(`data-limit-bytes="${SIZE_LIMITS.monthly}" data-limit-label="20 MB"`));
+  assert.match(m01, new RegExp(`data-limit-bytes="${SIZE_LIMITS.monthly}" data-limit-label="40 MB"`));
   assert.match(m01, /<a class="btn" href="\/v\/m01" target="_blank" rel="noopener"><svg[^>]*>.*?<\/svg>ดูวีดีโอ<\/a>/);
   assert.match(m01, new RegExp(`data-action="copy" data-url="${srv.url}/v/m01"`));
   assert.match(m01, /href="\/admin\/qr\/m01\.png" download/);
@@ -220,13 +220,13 @@ test('end to end: upload → /v shows it → replace → old file deleted, /medi
   assert.match(page2, new RegExp(`src="/media/${r2.r2_key}"`));
 });
 
-test('AC3: e-card accepts more than the monthly limit (20 MiB + 1 byte)', async (t) => {
+test('AC3: e-card accepts more than the monthly limit (40 MiB + 1 byte)', async (t) => {
   t.mock.method(console, 'log', () => {});
-  const { blob, cleanup } = await sparseBlob(20 * MIB + 1);
+  const { blob, cleanup } = await sparseBlob(40 * MIB + 1);
   try {
     const res = await upload('ecard-lee', blob);
     assert.equal(res.status, 200);
-    assert.equal((await res.json()).video.sizeBytes, 20 * MIB + 1);
+    assert.equal((await res.json()).video.sizeBytes, 40 * MIB + 1);
   } finally {
     await cleanup();
   }
@@ -234,14 +234,14 @@ test('AC3: e-card accepts more than the monthly limit (20 MiB + 1 byte)', async 
 
 // ---------------------------------------------------------------- AC3 errors
 
-test('AC3: monthly over 20 MiB → 413 too_large (Thai), nothing stored', async () => {
-  const { blob, cleanup } = await sparseBlob(20 * MIB + 1);
+test('AC3: monthly over 40 MiB → 413 too_large (Thai), nothing stored', async () => {
+  const { blob, cleanup } = await sparseBlob(40 * MIB + 1);
   try {
     const res = await upload('m03', blob);
     assert.equal(res.status, 413);
     const body = await res.json();
     assert.equal(body.code, 'too_large');
-    assert.match(body.message, /ไฟล์ใหญ่เกิน 20 MB/);
+    assert.match(body.message, /ไฟล์ใหญ่เกิน 40 MB/);
     await assertNothingStored('m03');
   } finally {
     await cleanup();
@@ -467,7 +467,7 @@ function hookedPool({ commit, query } = {}) {
   };
 }
 
-test('QB1: a monthly file of exactly 20 MiB (20,971,520 bytes) is accepted', async (t) => {
+test('QB1: a monthly file of exactly 40 MiB (41,943,040 bytes) is accepted', async (t) => {
   t.mock.method(console, 'log', () => {});
   const { blob, cleanup } = await sparseBlob(SIZE_LIMITS.monthly);
   try {

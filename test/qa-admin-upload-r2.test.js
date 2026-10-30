@@ -158,7 +158,7 @@ function runAdminJs(limitLabel) {
 // ================================================================== 1. QB1: limits agree everywhere
 
 test('1. exact limit accepted / +1 refused by browser (admin.js), CLI (video:set) and server alike', { timeout: 180000 }, async () => {
-  const labels = { monthly: '20 MB', ecard: '100 MB' };
+  const labels = { monthly: '40 MB', ecard: '100 MB' };
   for (const [slug, kind, cardIdx] of [['m06', 'monthly', 0], ['ecard-loxley', 'ecard', 1]]) {
     const limit = SIZE_LIMITS[kind];
 
@@ -202,16 +202,16 @@ test('2. customer-facing sizes say MB (API, page, admin.js, too_large JSON, READ
   const up = await upload('m01', await sparseBlob(Math.round(7.3 * MIB)));
   assert.equal(up.status, 200);
   assert.equal(up.json.video.sizeLabel, '7.3 MB');
-  assert.equal(up.json.video.limitLabel, '20 MB');
+  assert.equal(up.json.video.limitLabel, '40 MB');
 
   const apiText = await (await b.get('/api/admin/videos')).text();
   assert.doesNotMatch(apiText, /MiB|KiB/);
   const { videos } = JSON.parse(apiText);
-  for (const v of videos) assert.equal(v.limitLabel, v.kind === 'ecard' ? '100 MB' : '20 MB', v.slug);
+  for (const v of videos) assert.equal(v.limitLabel, v.kind === 'ecard' ? '100 MB' : '40 MB', v.slug);
 
   const page = await (await b.get('/admin')).text();
   assert.doesNotMatch(page, /MiB|KiB/);
-  assert.match(page, /ไม่เกิน 20 MB/);
+  assert.match(page, /ไม่เกิน 40 MB/);
   assert.match(page, /ไม่เกิน 100 MB/);
   assert.match(page, /7\.3 MB/);
 
@@ -220,7 +220,7 @@ test('2. customer-facing sizes say MB (API, page, admin.js, too_large JSON, READ
   // Streaming over-limit (monthly) and declared-too-large (ecard) both say MB.
   const over = await upload('m02', await sparseBlob(SIZE_LIMITS.monthly + 1));
   assert.equal(over.status, 413);
-  assert.match(over.json.message, /20 MB/);
+  assert.match(over.json.message, /40 MB/);
   assert.doesNotMatch(over.json.message, /MiB|KiB|bytes/);
   const declared = await new Promise((resolve, reject) => {
     const { port } = new URL(srv.url);
@@ -248,7 +248,7 @@ test('2. customer-facing sizes say MB (API, page, admin.js, too_large JSON, READ
   const end = readme.indexOf('\n## ', start + 5);
   const guide = readme.slice(start, end < 0 ? undefined : end);
   assert.doesNotMatch(guide, /MiB|KiB/);
-  assert.match(guide, /20 MB/);
+  assert.match(guide, /40 MB/);
   assert.match(guide, /100 MB/);
 });
 
@@ -392,7 +392,7 @@ test('5a. real app.js: server.requestTimeout ≈ 30 min, headersTimeout ≤ 60 s
 });
 
 test('5b. admin.js: progress shows %, and "กำลังบันทึก..." once 100% is sent', async () => {
-  const js = runAdminJs({ monthly: '20 MB', ecard: '100 MB' });
+  const js = runAdminJs({ monthly: '40 MB', ecard: '100 MB' });
   await js.pick(js.cards[0], 1000);
   const xhr = js.xhrs[0];
   assert.ok(xhr, 'upload started');
